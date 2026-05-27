@@ -4,14 +4,14 @@ import { games as defaultGames } from '@/data/games';
 const KEY = 'weinoz:games';
 
 function configured() {
-  return !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+  return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
 }
 
 async function redis(command: unknown[]) {
-  const res = await fetch(process.env.UPSTASH_REDIS_REST_URL!, {
+  const res = await fetch(process.env.KV_REST_API_URL!, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN!}`,
+      Authorization: `Bearer ${process.env.KV_REST_API_TOKEN!}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(command),
