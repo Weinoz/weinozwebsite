@@ -48,9 +48,19 @@ export default function GameCard({ game }: Props) {
           alignItems: 'center',
           justifyContent: 'center',
           position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        <Gamepad2 style={{ color: `hsl(${hue},60%,55%)`, opacity: 0.15, width: '2.5rem', height: '2.5rem' }} />
+        {game.cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={game.cover}
+            alt={game.title}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }}
+          />
+        ) : (
+          <Gamepad2 style={{ color: `hsl(${hue},60%,55%)`, opacity: 0.15, width: '2.5rem', height: '2.5rem' }} />
+        )}
         <span
           className={status.cls}
           style={{
