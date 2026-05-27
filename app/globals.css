@@ -1,26 +1,126 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --purple-vivid: #A020F0;
+  --purple-mid: #7B0DE8;
+  --purple-deep: #5A0DC8;
+  --purple-dark: #0C0010;
+  --purple-ink: #100018;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--purple-ink);
+  color: #f0e8ff;
+  font-family: var(--font-geist-sans, Arial, sans-serif);
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--purple-ink); }
+::-webkit-scrollbar-thumb { background: rgba(160, 32, 240, 0.5); border-radius: 2px; }
+
+/* Grain overlay — applied in layout */
+.grain-layer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9998;
+  opacity: 0.055;
+  mix-blend-mode: overlay;
+}
+
+/* Section label */
+.section-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #D06EFF 0%, #A020F0 50%, #7B6FFF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Status badges */
+.status-completed { background: rgba(34, 197, 94, 0.12); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.25); }
+.status-playing    { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.3); }
+.status-abandoned  { background: rgba(239, 68, 68, 0.12); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.25); }
+.status-wishlist   { background: rgba(234, 179, 8, 0.12); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.25); }
+
+/* Animations */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes line-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+.anim-fade-up  { animation: fade-up  0.7s ease-out forwards; }
+.anim-fade-in  { animation: fade-in  0.5s ease-out forwards; }
+
+/* Social list row hover */
+.social-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  text-decoration: none;
+  transition: border-color 0.2s;
+}
+.social-row:hover {
+  border-color: rgba(160, 32, 240, 0.3);
+}
+.social-row:hover .social-name  { color: white; }
+.social-row:hover .social-icon  { color: #c084fc; }
+.social-row:hover .social-handle { color: #c084fc; }
+.social-row:hover .social-arrow { color: rgba(255,255,255,0.7); transform: translate(2px, -2px); }
+
+.social-name   { font-size: clamp(1.1rem, 3vw, 1.6rem); font-weight: 800; color: rgba(255,255,255,0.7); letter-spacing: -0.02em; transition: color 0.2s; }
+.social-icon   { color: rgba(160,32,240,0.6); transition: color 0.2s; }
+.social-handle { font-family: monospace; font-size: 0.8rem; color: rgba(255,255,255,0.25); transition: color 0.2s; }
+.social-arrow  { color: rgba(255,255,255,0.2); transition: color 0.2s, transform 0.2s; }
+
+/* Card hover (CSS-only for server components) */
+.card-hover {
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.card-hover:hover {
+  border-color: rgba(160,32,240,0.3);
+  transform: translateY(-2px);
+}
+
+.game-card-hover {
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.game-card-hover:hover {
+  border-color: rgba(160,32,240,0.25);
+  transform: translateY(-2px);
 }
