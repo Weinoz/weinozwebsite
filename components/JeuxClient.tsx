@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import GameCard from '@/components/GameCard';
 import GameModal from '@/components/GameModal';
 import { Game, GameStatus, GamePlatform, GameTier } from '@/data/games';
-import { Star, Clock, Gamepad2, Trophy, Play, X, BookMarked, Infinity, Search, FilterX } from 'lucide-react';
+import { Star, Clock, Gamepad2, Trophy, Play, X, BookMarked, Infinity, Search, FilterX, LayoutGrid, CalendarDays } from 'lucide-react';
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -62,6 +62,7 @@ export default function JeuxClient({ initialGames }: Props) {
   const [activeGenre,     setActiveGenre]     = useState('all');
   const [sortBy,          setSortBy]          = useState('rating-desc');
   const [selectedGame,    setSelectedGame]    = useState<Game | null>(null);
+  const [view,            setView]            = useState<'grid' | 'timeline'>('grid');
 
   // Unique genres sorted alphabetically
   const genres = useMemo(() => {
@@ -97,6 +98,23 @@ export default function JeuxClient({ initialGames }: Props) {
     }
     return list;
   }, [initialGames, search, activeStatus, activePlatform, activeTier, activeGenre, sortBy]);
+
+  // Timeline groups (year desc, games sorted by rating desc within year)
+  const timelineGroups = useMemo(() => {
+    const withYear    = filtered.filter((g) => g.year !== undefined);
+    const withoutYear = filtered.filter((g) => g.year === undefined);
+    const map = new Map<number, Game[]>();
+    for (const g of withYear) {
+      const yr = g.year!;
+      if (!map.has(yr)) map.set(yr, []);
+      map.get(yr)!.push(g);
+    }
+    // sort within year by rating desc
+    for (const [, arr] of map) arr.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
+    const sorted = [...map.entries()].sort((a, b) => b[0] - a[0]);
+    if (withoutYear.length) sorted.push([0, withoutYear]);
+    return sorted;
+  }, [filtered]);
 
   // Stats
   const totalHours    = initialGames.reduce((acc, g) => acc + (g.hours ?? 0), 0);
@@ -297,11 +315,29 @@ export default function JeuxClient({ initialGames }: Props) {
               <FilterX className="w-3.5 h-3.5" /> Réinitialiser
             </button>
           )}
+
+          {/* View toggle */}
+          <div className="flex ml-auto glass rounded-full p-0.5 gap-0.5">
+            {([['grid', <LayoutGrid key="g" className="w-3.5 h-3.5" />], ['timeline', <CalendarDays key="t" className="w-3.5 h-3.5" />]] as const).map(([v, icon]) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                title={v === 'grid' ? 'Vue grille' : 'Vue timeline'}
+                className="p-1.5 rounded-full transition-all"
+                style={{
+                  background: view === v ? 'rgba(168,85,247,0.25)' : 'transparent',
+                  color: view === v ? '#c084fc' : 'rgba(168,85,247,0.35)',
+                }}
+              >
+                {icon}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Games grid */}
-      {filtered.length === 0 ? (
+      {/* Empty state */}
+      {filtered.length === 0 && (
         <div className="text-center py-24 text-purple-300/40">
           <Search className="w-10 h-10 mx-auto mb-3 opacity-30" />
           <p className="text-lg font-semibold">Aucun jeu pour ces filtres.</p>
@@ -309,10 +345,48 @@ export default function JeuxClient({ initialGames }: Props) {
             Réinitialiser
           </button>
         </div>
-      ) : (
+      )}
+
+      {/* Grid view */}
+      {filtered.length > 0 && view === 'grid' && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filtered.map((g) => (
             <GameCard key={g.id} game={g} onClick={() => setSelectedGame(g)} />
+          ))}
+        </div>
+      )}
+
+      {/* Timeline view */}
+      {filtered.length > 0 && view === 'timeline' && (
+        <div className="flex flex-col gap-10">
+          {timelineGroups.map(([year, games]) => (
+            <section key={year}>
+              {/* Year header */}
+              <div className="flex items-center gap-4 mb-5">
+                <span style={{
+                  fontSize: 'clamp(1.8rem, 4vw, 2.8rem)',
+                  fontWeight: 900,
+                  lineHeight: 1,
+                  background: 'linear-gradient(135deg, #D06EFF 0%, #7B6FFF 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  flexShrink: 0,
+                }}>
+                  {year === 0 ? '—' : year}
+                </span>
+                <div style={{ flex: 1, height: '1px', background: 'linear-gradient(90deg, rgba(168,85,247,0.35) 0%, transparent 100%)' }} />
+                <span className="text-xs text-purple-300/30 font-semibold">
+                  {games.length} jeu{games.length > 1 ? 'x' : ''}
+                </span>
+              </div>
+              {/* Games in that year */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                {games.map((g) => (
+                  <GameCard key={g.id} game={g} onClick={() => setSelectedGame(g)} />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
