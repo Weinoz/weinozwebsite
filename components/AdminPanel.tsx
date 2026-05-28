@@ -27,7 +27,7 @@ const STATUSES: { value: GameStatus; label: string; color: string }[] = [
 
 interface Props { initialGames: Game[]; initialTopIds: string[]; initialConfig: SiteConfig }
 
-type PanelMode = 'add' | 'edit' | 'manual' | null;
+type PanelMode = 'add' | 'edit' | 'manual' | 'steam' | null;
 type AdminTab = 'games' | 'about' | 'videos';
 
 export default function AdminPanel({ initialGames, initialTopIds, initialConfig }: Props) {
@@ -59,8 +59,14 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   // Panel mode
   const [panelMode, setPanelMode] = useState<PanelMode>(null);
   const [selectedRawg, setSelectedRawg] = useState<RawgGame | null>(null);
+  const [selectedSteam, setSelectedSteam] = useState<SteamSearchHit | null>(null);
+  const [steamGameInfo, setSteamGameInfo] = useState<SteamGameInfo | null>(null);
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [fetchingDetail, setFetchingDetail] = useState(false);
+
+  // Steam fallback search (triggered automatically when RAWG returns nothing)
+  const [steamFallbackResults, setSteamFallbackResults] = useState<SteamSearchHit[]>([]);
+  const [steamFallbackSearching, setSteamFallbackSearching] = useState(false);
 
   // Form fields
   const [platform, setPlatform] = useState<GamePlatform>('PC');
@@ -104,25 +110,40 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
 
   // Panel cover + title display
   const panelCover  = panelMode === 'add'    ? (coverUrlOverride.trim() || selectedRawg?.background_image)
+                    : panelMode === 'steam'  ? (coverUrlOverride.trim() || steamGameInfo?.headerImage || selectedSteam?.cover)
                     : panelMode === 'manual' ? (manualCover.trim() || undefined)
                     : (coverUrlOverride.trim() || editingGame?.cover);
-  const panelTitle  = panelMode === 'add' ? selectedRawg?.name
+  const panelTitle  = panelMode === 'add'    ? selectedRawg?.name
+                    : panelMode === 'steam'  ? (steamGameInfo?.name ?? selectedSteam?.name)
                     : panelMode === 'manual' ? (manualTitle || 'Nouveau jeu')
                     : editingGame?.title;
-  const panelYear   = panelMode === 'add'
-    ? (selectedRawg?.released ? new Date(selectedRawg.released).getFullYear() : null)
-    : editingGame?.year ?? null;
-  const panelGenre  = panelMode === 'add' ? selectedRawg?.genres?.[0]?.name : editingGame?.genre;
+  const panelYear   = panelMode === 'add'   ? (selectedRawg?.released ? new Date(selectedRawg.released).getFullYear() : null)
+                    : panelMode === 'steam' ? (steamGameInfo?.year ?? null)
+                    : editingGame?.year ?? null;
+  const panelGenre  = panelMode === 'add'   ? selectedRawg?.genres?.[0]?.name
+                    : panelMode === 'steam' ? steamGameInfo?.genre
+                    : editingGame?.genre;
 
-  // Debounced RAWG search
+  // Debounced RAWG search — falls back to Steam when RAWG returns nothing
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!query.trim()) { setResults([]); return; }
+    if (!query.trim()) { setResults([]); setSteamFallbackResults([]); return; }
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
+      setSteamFallbackResults([]);
       try {
         const res = await fetch(`/api/rawg?q=${encodeURIComponent(query)}`);
-        setResults(await res.json());
+        const hits: RawgGame[] = await res.json();
+        setResults(hits);
+        if (hits.length === 0) {
+          // RAWG found nothing — automatically search Steam
+          setSteamFallbackSearching(true);
+          try {
+            const sr = await fetch(`/api/steam/search?q=${encodeURIComponent(query)}`);
+            setSteamFallbackResults(await sr.json());
+          } catch { setSteamFallbackResults([]); }
+          finally { setSteamFallbackSearching(false); }
+        }
       } catch { setResults([]); }
       finally { setSearching(false); }
     }, 400);
@@ -136,11 +157,33 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   }
 
   function closePanel() {
-    setPanelMode(null); setSelectedRawg(null); setEditingGame(null); resetForm();
+    setPanelMode(null);
+    setSelectedRawg(null);
+    setSelectedSteam(null); setSteamGameInfo(null);
+    setEditingGame(null);
+    resetForm();
   }
 
   function openManualPanel() {
-    setSelectedRawg(null); setEditingGame(null); resetForm(); setPanelMode('manual');
+    setSelectedRawg(null); setSelectedSteam(null); setSteamGameInfo(null);
+    setEditingGame(null); resetForm(); setPanelMode('manual');
+  }
+
+  async function openSteamAddPanel(hit: SteamSearchHit) {
+    setSelectedSteam(hit); setSelectedRawg(null); setSteamGameInfo(null);
+    setEditingGame(null); resetForm(); setPanelMode('steam');
+    setStoreUrl(hit.storeUrl);
+    // Fetch full details (name / year / genre / hi-res cover)
+    setFetchingDetail(true);
+    try {
+      const res = await fetch(`/api/steam/details/${hit.id}`);
+      const info: SteamGameInfo | null = await res.json();
+      if (info) {
+        setSteamGameInfo(info);
+        setStoreUrl(hit.storeUrl); // keep Steam store URL
+      }
+    } catch { /* ignore — we still have hit.name and hit.cover */ }
+    finally { setFetchingDetail(false); }
   }
 
   async function openAddPanel(g: RawgGame) {
@@ -172,8 +215,9 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   }
 
   function handleSubmit() {
-    if (panelMode === 'add' && !selectedRawg) return;
-    if (panelMode === 'edit' && !editingGame) return;
+    if (panelMode === 'add'    && !selectedRawg) return;
+    if (panelMode === 'steam'  && !selectedSteam) return;
+    if (panelMode === 'edit'   && !editingGame) return;
     if (panelMode === 'manual' && !manualTitle.trim()) return;
 
     const sharedFields = {
@@ -195,6 +239,17 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
         genre: selectedRawg!.genres?.[0]?.name,
         ...sharedFields,
       }
+      : panelMode === 'steam' ? {
+        id: `steam-${selectedSteam!.id}`,
+        title: steamGameInfo?.name ?? selectedSteam!.name,
+        cover: coverUrlOverride.trim() || steamGameInfo?.headerImage || selectedSteam!.cover || undefined,
+        rawgId: undefined,
+        year: steamGameInfo?.year,
+        genre: steamGameInfo?.genre,
+        ...sharedFields,
+        // storeUrl from sharedFields (editable by user) takes priority; fall back to Steam URL
+        storeUrl: sharedFields.storeUrl || selectedSteam!.storeUrl,
+      }
       : panelMode === 'manual' ? {
         id: `manual-${Date.now()}`,
         title: manualTitle.trim(),
@@ -211,7 +266,9 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
       await addGameAction(game);
       setGames((prev) => [game, ...prev.filter((g) => g.id !== game.id)]);
       closePanel();
-      if (panelMode === 'add' || panelMode === 'manual') { setQuery(''); setResults([]); }
+      if (panelMode === 'add' || panelMode === 'manual' || panelMode === 'steam') {
+        setQuery(''); setResults([]); setSteamFallbackResults([]);
+      }
     });
   }
 
@@ -836,7 +893,43 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
             )}
           </div>
 
-          {searching && <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.85rem', marginBottom: '1rem' }}>Recherche en cours…</p>}
+          {(searching || steamFallbackSearching) && (
+            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              {searching ? 'Recherche RAWG…' : '🎮 Aucun résultat RAWG — recherche sur Steam…'}
+            </p>
+          )}
+
+          {/* Steam fallback results (shown when RAWG returns nothing) */}
+          {!searching && !steamFallbackSearching && steamFallbackResults.length > 0 && (
+            <div style={{ marginBottom: '2.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                <p className="section-label">Résultats Steam — clique pour ajouter</p>
+                <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.45rem', borderRadius: '4px', background: 'rgba(6,182,212,0.1)', color: '#67e8f9', border: '1px solid rgba(6,182,212,0.25)', fontWeight: 700 }}>
+                  RAWG vide
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.75rem' }}>
+                {steamFallbackResults.map((g) => (
+                  <button key={g.id} onClick={() => openSteamAddPanel(g)} style={{
+                    ...card, textAlign: 'left', padding: 0,
+                    background: selectedSteam?.id === g.id ? 'rgba(6,182,212,0.12)' : 'rgba(255,255,255,0.04)',
+                    borderColor: selectedSteam?.id === g.id ? 'rgba(6,182,212,0.45)' : 'rgba(255,255,255,0.08)',
+                  }}>
+                    <div style={{ position: 'relative' }}>
+                      <img src={g.cover} alt={g.name} style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      <span style={{ position: 'absolute', top: '0.3rem', right: '0.3rem', fontSize: '0.55rem', fontWeight: 700, padding: '0.1rem 0.3rem', borderRadius: '3px', background: 'rgba(6,182,212,0.85)', color: '#fff' }}>
+                        Steam
+                      </span>
+                    </div>
+                    <div style={{ padding: '0.5rem' }}>
+                      <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'white', lineHeight: 1.3 }}>{g.name}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* RAWG results */}
           {results.length > 0 && (
@@ -1067,8 +1160,8 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                     </p>
                   )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.2rem' }}>
-                    <p style={{ fontSize: '0.7rem', color: 'rgba(160,32,240,0.6)', fontWeight: 600 }}>
-                      {panelMode === 'edit' ? 'Mode édition' : panelMode === 'manual' ? 'Ajout manuel' : 'Nouveau jeu'}
+                    <p style={{ fontSize: '0.7rem', color: panelMode === 'steam' ? 'rgba(6,182,212,0.7)' : 'rgba(160,32,240,0.6)', fontWeight: 600 }}>
+                      {panelMode === 'edit' ? 'Mode édition' : panelMode === 'manual' ? 'Ajout manuel' : panelMode === 'steam' ? '🎮 Depuis Steam' : 'Nouveau jeu (RAWG)'}
                     </p>
                     {panelMode === 'edit' && editingGame && (
                       <button
@@ -1281,7 +1374,9 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
                   padding: '0.8rem', borderRadius: '10px', border: 'none',
-                  background: 'linear-gradient(135deg,#7c3aed,#a855f7)',
+                  background: panelMode === 'steam'
+                    ? 'linear-gradient(135deg,#0369a1,#0ea5e9)'
+                    : 'linear-gradient(135deg,#7c3aed,#a855f7)',
                   color: 'white', fontWeight: 700, fontSize: '0.95rem',
                   cursor: (isPending || (panelMode === 'manual' && !manualTitle.trim())) ? 'not-allowed' : 'pointer',
                   opacity: (isPending || (panelMode === 'manual' && !manualTitle.trim())) ? 0.5 : 1,
@@ -1291,6 +1386,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                 {panelMode === 'edit' ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                 {isPending ? 'Sauvegarde…'
                   : panelMode === 'edit' ? 'Enregistrer les modifications'
+                  : panelMode === 'steam' ? '🎮 Ajouter depuis Steam'
                   : 'Ajouter à ma biblio'}
               </button>
             </div>
