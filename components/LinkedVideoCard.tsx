@@ -17,6 +17,14 @@ function getTwitchVideoId(url: string): string | null {
   return m?.[1] ?? null;
 }
 
+function getTwitchClipId(url: string): string | null {
+  // https://clips.twitch.tv/{slug}
+  // https://www.twitch.tv/{user}/clip/{slug}
+  const m = url.match(/clips\.twitch\.tv\/([A-Za-z0-9_-]+)/) ??
+            url.match(/twitch\.tv\/[^/]+\/clip\/([A-Za-z0-9_-]+)/);
+  return m?.[1] ?? null;
+}
+
 // ── shared overlay ────────────────────────────────────────────────────────────
 
 function PlayOverlay({ color }: { color: string }) {
@@ -60,8 +68,9 @@ interface Props {
 export default function LinkedVideoCard({ url, index }: Props) {
   const [expanded, setExpanded] = useState(false);
 
-  const ytId     = getYouTubeId(url);
-  const twitchId = getTwitchVideoId(url);
+  const ytId      = getYouTubeId(url);
+  const twitchId  = getTwitchVideoId(url);
+  const clipId    = getTwitchClipId(url);
 
   // ── YouTube ──────────────────────────────────────────────────────────────
   if (ytId) {
@@ -104,6 +113,11 @@ export default function LinkedVideoCard({ url, index }: Props) {
     return <TwitchVodCard twitchId={twitchId} index={index} url={url} />;
   }
 
+  // ── Twitch Clip ───────────────────────────────────────────────────────────
+  if (clipId) {
+    return <TwitchClipCard clipId={clipId} index={index} url={url} />;
+  }
+
   // ── Generic fallback ──────────────────────────────────────────────────────
   return (
     <a
@@ -122,7 +136,87 @@ export default function LinkedVideoCard({ url, index }: Props) {
   );
 }
 
-// ── Twitch sub-component (needs useEffect for thumbnail fetch) ────────────────
+// ── Twitch Clip sub-component ─────────────────────────────────────────────────
+
+function TwitchClipCard({ clipId, index, url }: { clipId: string; index: number; url: string }) {
+  const [expanded, setExpanded]       = useState(false);
+  const [thumbnail, setThumbnail]     = useState<string | null>(null);
+  const [thumbLoaded, setThumbLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/twitch/clip/${clipId}`)
+      .then((r) => r.json())
+      .then((d) => { if (d?.thumbnail) setThumbnail(d.thumbnail); })
+      .catch(() => {});
+  }, [clipId]);
+
+  if (expanded) {
+    const parent = typeof window !== 'undefined' ? window.location.hostname : 'weinoz.com';
+    return (
+      <div style={{ borderRadius: '12px', overflow: 'hidden', aspectRatio: '16/9' }}>
+        <iframe
+          src={`https://clips.twitch.tv/embed?clip=${clipId}&parent=${parent}&autoplay=true`}
+          title={`Clip Twitch ${index + 1}`}
+          allowFullScreen
+          style={{ width: '100%', height: '100%', border: 'none' }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setExpanded(true)}
+      title="Regarder le clip Twitch"
+      style={{
+        position: 'relative', borderRadius: '12px', overflow: 'hidden',
+        aspectRatio: '16/9', display: 'block', width: '100%',
+        cursor: 'pointer', border: 'none', padding: 0,
+        background: 'linear-gradient(135deg, #1a0533 0%, #2d0b66 100%)',
+      }}
+    >
+      {thumbnail && (
+        <img
+          src={thumbnail}
+          alt={`Clip Twitch ${index + 1}`}
+          onLoad={() => setThumbLoaded(true)}
+          style={{
+            position: 'absolute', inset: 0,
+            width: '100%', height: '100%', objectFit: 'cover',
+            opacity: thumbLoaded ? 0.85 : 0,
+            transition: 'opacity 0.3s ease',
+          }}
+        />
+      )}
+      {!thumbLoaded && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          backgroundImage: 'radial-gradient(rgba(145,71,255,0.12) 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
+        }} />
+      )}
+      <PlayOverlay color="rgba(145,70,255,0.88)" />
+      <PlatformBadge label="Twitch Clip" color="#c084fc" />
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        title="Ouvrir sur Twitch"
+        style={{
+          position: 'absolute', top: '0.5rem', right: '0.5rem',
+          background: 'rgba(0,0,0,0.6)', borderRadius: '4px',
+          padding: '0.2rem 0.4rem', fontSize: '0.6rem', fontWeight: 700,
+          color: 'rgba(255,255,255,0.6)', textDecoration: 'none',
+        }}
+      >
+        ↗
+      </a>
+    </button>
+  );
+}
+
+// ── Twitch VOD sub-component (needs useEffect for thumbnail fetch) ─────────────
 
 function TwitchVodCard({ twitchId, index, url }: { twitchId: string; index: number; url: string }) {
   const [expanded, setExpanded]     = useState(false);

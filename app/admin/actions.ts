@@ -7,7 +7,7 @@ import { getGames, saveGames, saveTopGameIds, saveSiteConfig, SiteConfig, getStr
 import { Game } from '@/data/games';
 import { Video } from '@/data/videos';
 import { fetchYouTubeVideos, fetchYouTubeVideoTags } from '@/lib/youtube';
-import { fetchTwitchVideos, fetchTwitchLiveStream } from '@/lib/twitch';
+import { fetchTwitchVideos, fetchTwitchClips, fetchTwitchLiveStream } from '@/lib/twitch';
 import { buildVideoLinks, findGameByName, findGameForVideo } from '@/lib/autolink';
 
 export async function loginAction(_: unknown, formData: FormData) {
@@ -90,11 +90,14 @@ export async function fetchVideosForAdminAction(): Promise<{
   const ytId      = process.env.YOUTUBE_CHANNEL_ID;
   const ytApiKey  = process.env.YOUTUBE_API_KEY;
 
-  const [games, ytRaw, twitchRaw, streamGamesMap] = await Promise.all([
+  const [games, ytRaw, twitchRaw, clipsRaw, streamGamesMap] = await Promise.all([
     getGames(),
     ytId ? fetchYouTubeVideos(ytId) : Promise.resolve([] as Video[]),
     clientId && secret && login
       ? fetchTwitchVideos(clientId, secret, login)
+      : Promise.resolve([] as Video[]),
+    clientId && secret && login
+      ? fetchTwitchClips(clientId, secret, login)
       : Promise.resolve([] as Video[]),
     getStreamGames(),
   ]);
@@ -125,8 +128,8 @@ export async function fetchVideosForAdminAction(): Promise<{
     }
   }
 
-  // Build enriched video list
-  const allVideos = [...ytRaw, ...twitchRaw] as Video[];
+  // Build enriched video list (VODs first, then clips)
+  const allVideos = [...ytRaw, ...twitchRaw, ...clipsRaw] as Video[];
   const adminVideos: AdminVideo[] = allVideos.map((v) => {
     const linked = urlToGame.get(v.url);
 
@@ -140,6 +143,12 @@ export async function fetchVideosForAdminAction(): Promise<{
         const g = findGameByName(sg.gameName, games) ?? findGameForVideo(sg.gameName, games);
         if (g) detectedGame = { id: g.id, title: g.title };
       }
+    }
+
+    // For Twitch clips: use twitchGameName (best match — direct from API)
+    if (!detectedGame && v.isClip && v.twitchGameName) {
+      const g = findGameByName(v.twitchGameName, games);
+      if (g) detectedGame = { id: g.id, title: g.title };
     }
 
     if (!detectedGame && v.platform === 'youtube' && v.videoId) {

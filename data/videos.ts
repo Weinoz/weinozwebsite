@@ -4,9 +4,12 @@ export interface Video {
   id: string;
   title: string;
   platform: VideoPlatform;
-  videoId?: string;     // YouTube video ID
-  streamId?: string;    // Twitch stream ID (links a VOD to a live session)
-  thumbnail?: string;   // URL custom (Twitch, etc.)
+  videoId?: string;        // YouTube video ID
+  streamId?: string;       // Twitch stream ID (links a VOD to a live session)
+  twitchGameId?: string;   // Twitch game_id on clips
+  twitchGameName?: string; // Resolved game name for clips
+  isClip?: boolean;        // true for Twitch clips (vs VODs)
+  thumbnail?: string;      // URL custom (Twitch, etc.)
   url: string;
   date: string;
   duration?: string;

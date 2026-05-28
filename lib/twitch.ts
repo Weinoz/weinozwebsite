@@ -170,6 +170,75 @@ export async function fetchTwitchLiveStream(
   }
 }
 
+// ── Clips ─────────────────────────────────────────────────────────────────────
+
+async function batchGameNames(
+  clientId: string,
+  token: string,
+  gameIds: string[],
+): Promise<Map<string, string>> {
+  if (!gameIds.length) return new Map();
+  const unique = [...new Set(gameIds)].slice(0, 100);
+  try {
+    const qs = unique.map((id) => `id=${id}`).join('&');
+    const res = await fetch(`https://api.twitch.tv/helix/games?${qs}`, {
+      headers: { 'Client-ID': clientId, Authorization: `Bearer ${token}` },
+      next: { revalidate: 86400 },
+    });
+    if (!res.ok) return new Map();
+    const data = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return new Map((data.data ?? []).map((g: any) => [g.id, g.name]));
+  } catch {
+    return new Map();
+  }
+}
+
+export async function fetchTwitchClips(
+  clientId: string,
+  clientSecret: string,
+  login: string,
+  count = 20,
+): Promise<Video[]> {
+  const token = await getToken(clientId, clientSecret);
+  if (!token) return [];
+  const userId = await getUserId(clientId, token, login);
+  if (!userId) return [];
+
+  try {
+    const res = await fetch(
+      `https://api.twitch.tv/helix/clips?broadcaster_id=${userId}&first=${count}`,
+      {
+        headers: { 'Client-ID': clientId, Authorization: `Bearer ${token}` },
+        next: { revalidate: 3600 },
+      },
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const clips: any[] = data.data ?? [];
+
+    const gameIds = clips.map((c) => c.game_id).filter(Boolean);
+    const gameNameMap = await batchGameNames(clientId, token, gameIds);
+
+    return clips.map((c) => ({
+      id: `twitch-clip-${c.id}`,
+      title: c.title ?? `Clip — ${login}`,
+      platform: 'twitch' as const,
+      isClip: true,
+      twitchGameId: c.game_id ?? undefined,
+      twitchGameName: c.game_id ? (gameNameMap.get(c.game_id) ?? undefined) : undefined,
+      url: c.url,
+      date: (c.created_at ?? '').split('T')[0],
+      duration: c.duration ? `${Math.round(c.duration)}s` : undefined,
+      views: c.view_count ? formatViews(c.view_count) : undefined,
+      thumbnail: c.thumbnail_url ?? undefined,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchTwitchVideos(
   clientId: string,
   clientSecret: string,
