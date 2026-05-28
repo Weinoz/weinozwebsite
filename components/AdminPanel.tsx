@@ -124,7 +124,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                     : panelMode === 'steam' ? steamGameInfo?.genre
                     : editingGame?.genre;
 
-  // Debounced RAWG search — falls back to Steam when RAWG returns nothing
+  // Debounced RAWG search
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!query.trim()) { setResults([]); setSteamFallbackResults([]); return; }
@@ -133,21 +133,22 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
       setSteamFallbackResults([]);
       try {
         const res = await fetch(`/api/rawg?q=${encodeURIComponent(query)}`);
-        const hits: RawgGame[] = await res.json();
-        setResults(hits);
-        if (hits.length === 0) {
-          // RAWG found nothing — automatically search Steam
-          setSteamFallbackSearching(true);
-          try {
-            const sr = await fetch(`/api/steam/search?q=${encodeURIComponent(query)}`);
-            setSteamFallbackResults(await sr.json());
-          } catch { setSteamFallbackResults([]); }
-          finally { setSteamFallbackSearching(false); }
-        }
+        setResults(await res.json());
       } catch { setResults([]); }
       finally { setSearching(false); }
     }, 400);
   }, [query]);
+
+  async function searchSteamManual() {
+    if (!query.trim()) return;
+    setSteamFallbackSearching(true);
+    setSteamFallbackResults([]);
+    try {
+      const res = await fetch(`/api/steam/search?q=${encodeURIComponent(query)}`);
+      setSteamFallbackResults(await res.json());
+    } catch { setSteamFallbackResults([]); }
+    finally { setSteamFallbackSearching(false); }
+  }
 
   function resetForm() {
     setPlatform('PC'); setStatus('terminé'); setTier(undefined);
@@ -871,8 +872,8 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
             )}
           </div>
 
-          {/* Manual add button */}
-          <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {/* Manual add + Steam search buttons */}
+          <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button
               onClick={openManualPanel}
               style={{
@@ -886,10 +887,24 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
             >
               <Plus className="w-3.5 h-3.5" /> Ajouter manuellement
             </button>
-            {query.trim() && !searching && results.length === 0 && (
-              <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' }}>
-                Aucun résultat RAWG — essaie l&apos;ajout manuel
-              </p>
+
+            {query.trim() && (
+              <button
+                onClick={searchSteamManual}
+                disabled={steamFallbackSearching}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.4rem',
+                  padding: '0.4rem 0.9rem', borderRadius: '8px', fontSize: '0.78rem', fontWeight: 600,
+                  background: steamFallbackResults.length > 0 ? 'rgba(6,182,212,0.15)' : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${steamFallbackResults.length > 0 ? 'rgba(6,182,212,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                  color: steamFallbackResults.length > 0 ? '#67e8f9' : 'rgba(255,255,255,0.35)',
+                  cursor: steamFallbackSearching ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
+                  opacity: steamFallbackSearching ? 0.6 : 1,
+                }}
+              >
+                <RefreshCw className="w-3.5 h-3.5" style={{ animation: steamFallbackSearching ? 'spin 1s linear infinite' : 'none' }} />
+                {steamFallbackSearching ? 'Steam…' : '🎮 Chercher sur Steam'}
+              </button>
             )}
           </div>
 
@@ -902,12 +917,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
           {/* Steam fallback results (shown when RAWG returns nothing) */}
           {!searching && !steamFallbackSearching && steamFallbackResults.length > 0 && (
             <div style={{ marginBottom: '2.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                <p className="section-label">Résultats Steam — clique pour ajouter</p>
-                <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.45rem', borderRadius: '4px', background: 'rgba(6,182,212,0.1)', color: '#67e8f9', border: '1px solid rgba(6,182,212,0.25)', fontWeight: 700 }}>
-                  RAWG vide
-                </span>
-              </div>
+              <p className="section-label" style={{ marginBottom: '1rem' }}>Résultats Steam — clique pour ajouter</p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.75rem' }}>
                 {steamFallbackResults.map((g) => (
                   <button key={g.id} onClick={() => openSteamAddPanel(g)} style={{
