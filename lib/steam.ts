@@ -35,6 +35,42 @@ export async function searchSteam(query: string): Promise<SteamSearchHit[]> {
   }
 }
 
+export interface SteamGameInfo {
+  name: string;
+  year?: number;
+  genre?: string;
+  headerImage: string;
+}
+
+/** Fetch name, release year, genre and header image for a Steam App ID. */
+export async function fetchSteamGameInfo(appId: number): Promise<SteamGameInfo | null> {
+  try {
+    const res = await fetch(
+      `https://store.steampowered.com/api/appdetails?appids=${appId}&cc=fr&l=fr`,
+      { next: { revalidate: 3600 } },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const entry = data?.[String(appId)];
+    if (!entry?.success || !entry.data) return null;
+    const d = entry.data;
+
+    // Date can be "15 nov. 2024", "2025", "Nov 15, 2024", "À venir", etc.
+    let year: number | undefined;
+    const yearMatch = (d.release_date?.date ?? '').match(/\b(19|20)\d{2}\b/);
+    if (yearMatch) year = parseInt(yearMatch[0], 10);
+
+    return {
+      name: d.name,
+      year,
+      genre: d.genres?.[0]?.description,
+      headerImage: d.header_image ?? `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Extract the numeric Steam App ID from a store URL, or null if not Steam. */
 export function extractSteamAppId(storeUrl: string): number | null {
   const m = storeUrl.match(/store\.steampowered\.com\/app\/(\d+)/);

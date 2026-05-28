@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useTransition } from 'react';
 import { Game, GameStatus, GamePlatform, GameTier } from '@/data/games';
 import { RawgGame } from '@/lib/rawg';
 import { SiteConfig } from '@/lib/redis';
-import { SteamSearchHit } from '@/lib/steam';
+import { SteamSearchHit, SteamGameInfo } from '@/lib/steam';
 import { addGameAction, removeGameAction, logoutAction, setTopGamesAction, saveSiteConfigAction } from '@/app/admin/actions';
 import { Star, Clock, Trash2, Plus, Search, X, LogOut, Gamepad2, Pencil, ExternalLink, Link, Video, RefreshCw, Trophy, User, Monitor, Mic } from 'lucide-react';
 
@@ -266,20 +266,32 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
     finally { setSyncing(null); }
   }
 
-  /** Apply a Steam search result as cover. */
+  /** Apply a Steam search result as cover — also fetches year & genre from appdetails. */
   async function applyCoverFromSteam(hit: SteamSearchHit) {
     if (!coverPickerGame) return;
-    const updated: Game = {
-      ...coverPickerGame,
-      cover: hit.cover,
-      rawgId: undefined,
-      storeUrl: coverPickerGame.storeUrl || hit.storeUrl,
-    };
     setSyncing(coverPickerGame.id);
+    // Snapshot game before async work so closures stay consistent
+    const baseGame = coverPickerGame;
     try {
+      // Fetch full Steam details for year + genre
+      let info: SteamGameInfo | null = null;
+      try {
+        const res = await fetch(`/api/steam/details/${hit.id}`);
+        info = await res.json();
+      } catch { /* ignore, proceed without extra info */ }
+
+      const updated: Game = {
+        ...baseGame,
+        cover: info?.headerImage ?? hit.cover,
+        rawgId: undefined,
+        storeUrl: baseGame.storeUrl || hit.storeUrl,
+        // Overwrite year & genre with Steam data (they were wrong from the RAWG mismatch)
+        year: info?.year ?? baseGame.year,
+        genre: info?.genre ?? baseGame.genre,
+      };
       await addGameAction(updated);
-      setGames((prev) => prev.map((g) => g.id === coverPickerGame.id ? updated : g));
-      if (editingGame?.id === coverPickerGame.id) setEditingGame(updated);
+      setGames((prev) => prev.map((g) => g.id === baseGame.id ? updated : g));
+      if (editingGame?.id === baseGame.id) setEditingGame(updated);
       setCoverPickerGame(null);
       setCoverPickerResults([]);
       setCoverPickerSteamResults([]);
