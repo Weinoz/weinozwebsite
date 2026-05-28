@@ -85,7 +85,7 @@ export default function JeuxClient({ initialGames }: Props) {
       list = list.filter((g) => normalize(g.title).includes(q) || normalize(g.genre ?? '').includes(q));
     }
     if (activeStatus   !== 'all') list = list.filter((g) => g.status   === activeStatus);
-    if (activePlatform !== 'all') list = list.filter((g) => g.platform === activePlatform);
+    if (activePlatform !== 'all') list = list.filter((g) => g.platforms.includes(activePlatform));
     if (activeTier     !== 'all') list = list.filter((g) => g.tier     === activeTier);
     if (activeGenre    !== 'all') list = list.filter((g) => g.genre    === activeGenre);
     switch (sortBy) {

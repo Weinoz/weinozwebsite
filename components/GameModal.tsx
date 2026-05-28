@@ -223,7 +223,7 @@ export default function GameModal({ game, onClose }: Props) {
                   padding: '0.25rem 0.8rem', borderRadius: '100px', fontSize: '0.72rem', fontWeight: 600,
                   background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.1)',
                 }}>
-                  {game.platform}
+                  {game.platforms.join(' · ')}
                 </span>
               </div>
             </div>

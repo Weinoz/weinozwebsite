@@ -70,7 +70,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   const [steamFallbackSearching, setSteamFallbackSearching] = useState(false);
 
   // Form fields
-  const [platform, setPlatform] = useState<GamePlatform>('PC');
+  const [platforms, setPlatforms] = useState<GamePlatform[]>(['PC']);
   const [status, setStatus] = useState<GameStatus>('terminé');
   const [tier, setTier] = useState<GameTier | undefined>(undefined);
   const [rating, setRating] = useState('');
@@ -165,7 +165,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   }
 
   function resetForm() {
-    setPlatform('PC'); setStatus('terminé'); setTier(undefined);
+    setPlatforms(['PC']); setStatus('terminé'); setTier(undefined);
     setRating(''); setHours(''); setComment(''); setStoreUrl('');
     setLinkedVideos([]); setVideoInput('');
     setManualTitle(''); setManualCover(''); setCoverUrlOverride('');
@@ -218,7 +218,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
 
   function openEditPanel(g: Game) {
     setEditingGame(g); setSelectedRawg(null);
-    setPlatform(g.platform); setStatus(g.status); setTier(g.tier);
+    setPlatforms(g.platforms ?? ['PC']); setStatus(g.status); setTier(g.tier);
     setRating(g.rating?.toString() ?? '');
     setHours(g.hours?.toString() ?? '');
     setComment(g.comment ?? '');
@@ -236,7 +236,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
     if (panelMode === 'manual' && !manualTitle.trim()) return;
 
     const sharedFields = {
-      platform, status, tier,
+      platforms, status, tier,
       rating: rating ? parseFloat(rating) : undefined,
       hours: hours ? parseInt(hours) : undefined,
       comment: comment.trim() || undefined,
@@ -1285,7 +1285,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                       {g.title}
                     </p>
                     <p style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)' }}>
-                      {g.platform} · {g.status}{g.rating !== undefined && ` · ★ ${g.rating}`}
+                      {g.platforms.join(' · ')} · {g.status}{g.rating !== undefined && ` · ★ ${g.rating}`}
                     </p>
                   </div>
                   {/* Actions */}
@@ -1521,21 +1521,39 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                 </div>
               </div>
 
-              {/* Platform */}
+              {/* Platforms (multi-select) */}
               <div>
-                <label className="section-label" style={{ display: 'block', marginBottom: '0.4rem' }}>Plateforme</label>
+                <label className="section-label" style={{ display: 'block', marginBottom: '0.4rem' }}>
+                  Plateforme{platforms.length > 1 ? 's' : ''}
+                </label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  {PLATFORMS.map((p) => (
-                    <button key={p} onClick={() => setPlatform(p)} style={{
-                      padding: '0.3rem 0.8rem', borderRadius: '100px', fontSize: '0.78rem', fontWeight: 600,
-                      border: '1px solid',
-                      background: platform === p ? 'rgba(160,32,240,0.2)' : 'transparent',
-                      borderColor: platform === p ? 'rgba(160,32,240,0.5)' : 'rgba(255,255,255,0.1)',
-                      color: platform === p ? '#c084fc' : 'rgba(255,255,255,0.4)',
-                      cursor: 'pointer',
-                    }}>{p}</button>
-                  ))}
+                  {PLATFORMS.map((p) => {
+                    const active = platforms.includes(p);
+                    return (
+                      <button key={p} onClick={() => {
+                        setPlatforms((prev) => {
+                          if (prev.includes(p)) {
+                            // Don't allow deselecting the last one
+                            return prev.length > 1 ? prev.filter((x) => x !== p) : prev;
+                          }
+                          return [...prev, p];
+                        });
+                      }} style={{
+                        padding: '0.3rem 0.8rem', borderRadius: '100px', fontSize: '0.78rem', fontWeight: 600,
+                        border: '1px solid',
+                        background: active ? 'rgba(160,32,240,0.2)' : 'transparent',
+                        borderColor: active ? 'rgba(160,32,240,0.5)' : 'rgba(255,255,255,0.1)',
+                        color: active ? '#c084fc' : 'rgba(255,255,255,0.4)',
+                        cursor: 'pointer',
+                      }}>{p}</button>
+                    );
+                  })}
                 </div>
+                {platforms.length > 1 && (
+                  <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.25)', marginTop: '0.35rem' }}>
+                    {platforms.join(' · ')}
+                  </p>
+                )}
               </div>
 
               {/* Rating + Hours */}

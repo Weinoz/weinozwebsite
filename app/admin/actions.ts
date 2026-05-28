@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getGames, saveGames, saveTopGameIds, saveSiteConfig, SiteConfig, getStreamGames, saveStreamGame } from '@/lib/redis';
-import { Game } from '@/data/games';
+import { Game, GamePlatform } from '@/data/games';
 import { Video } from '@/data/videos';
 import { fetchYouTubeVideos, fetchYouTubeVideoTags } from '@/lib/youtube';
 import { fetchTwitchVideos, fetchTwitchClips, fetchTwitchLiveStream } from '@/lib/twitch';
@@ -253,7 +253,7 @@ export async function importSteamGamesAction(
       id: `steam-${s.appId}`,
       title: s.name,
       cover: s.headerUrl, // use header (16:9) as default, portrait may 404
-      platform: 'PC' as const,
+      platforms: ['PC'] as GamePlatform[],
       status: 'terminé' as const,
       hours: s.playtimeMinutes > 0 ? Math.round(s.playtimeMinutes / 60) : undefined,
       storeUrl: s.storeUrl,

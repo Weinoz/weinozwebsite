@@ -40,12 +40,23 @@ async function redis(command: unknown[]) {
   return data.result;
 }
 
+/** Migrate a raw game object from the old single-platform shape to platforms[]. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function migrateGame(g: any): Game {
+  if (!g.platforms) {
+    g.platforms = g.platform ? [g.platform] : ['PC'];
+  }
+  delete g.platform;
+  return g as Game;
+}
+
 export async function getGames(): Promise<Game[]> {
   if (!configured()) return defaultGames;
   try {
     const raw = await redis(['GET', KEY]);
     if (!raw) return defaultGames;
-    return JSON.parse(raw) as Game[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (JSON.parse(raw) as any[]).map(migrateGame);
   } catch {
     return defaultGames;
   }

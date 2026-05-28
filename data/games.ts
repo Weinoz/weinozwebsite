@@ -6,7 +6,7 @@ export interface Game {
   id: string;
   title: string;
   cover?: string;
-  platform: GamePlatform;
+  platforms: GamePlatform[];
   status: GameStatus;
   tier?: GameTier;         // Tier list ranking
   rating?: number; // sur 10
@@ -24,7 +24,7 @@ export const games: Game[] = [
   {
     id: '1',
     title: 'Elden Ring',
-    platform: 'PC',
+    platforms: ['PC'],
     status: 'terminé',
     rating: 9.5,
     hours: 120,
@@ -35,7 +35,7 @@ export const games: Game[] = [
   {
     id: '2',
     title: 'The Witcher 3',
-    platform: 'PC',
+    platforms: ['PC'],
     status: 'terminé',
     rating: 10,
     hours: 200,
@@ -46,7 +46,7 @@ export const games: Game[] = [
   {
     id: '3',
     title: 'Cyberpunk 2077',
-    platform: 'PC',
+    platforms: ['PC'],
     status: 'terminé',
     rating: 8.5,
     hours: 80,
@@ -57,7 +57,7 @@ export const games: Game[] = [
   {
     id: '4',
     title: 'Hollow Knight',
-    platform: 'PC',
+    platforms: ['PC'],
     status: 'terminé',
     rating: 9,
     hours: 45,
@@ -68,7 +68,7 @@ export const games: Game[] = [
   {
     id: '5',
     title: 'God of War Ragnarök',
-    platform: 'PS5',
+    platforms: ['PS5'],
     status: 'terminé',
     rating: 9.5,
     hours: 55,
@@ -79,7 +79,7 @@ export const games: Game[] = [
   {
     id: '6',
     title: 'Baldur\'s Gate 3',
-    platform: 'PC',
+    platforms: ['PC'],
     status: 'en cours',
     rating: 9,
     hours: 60,
@@ -90,7 +90,7 @@ export const games: Game[] = [
   {
     id: '7',
     title: 'Hades',
-    platform: 'PC',
+    platforms: ['PC'],
     status: 'terminé',
     rating: 9,
     hours: 70,
@@ -101,7 +101,7 @@ export const games: Game[] = [
   {
     id: '8',
     title: 'Red Dead Redemption 2',
-    platform: 'PC',
+    platforms: ['PC'],
     status: 'terminé',
     rating: 10,
     hours: 110,
@@ -112,7 +112,7 @@ export const games: Game[] = [
   {
     id: '9',
     title: 'Dark Souls III',
-    platform: 'PC',
+    platforms: ['PC'],
     status: 'terminé',
     rating: 8.5,
     hours: 65,
@@ -123,7 +123,7 @@ export const games: Game[] = [
   {
     id: '10',
     title: 'Persona 5 Royal',
-    platform: 'PC',
+    platforms: ['PC'],
     status: 'en cours',
     rating: 9,
     hours: 40,
@@ -134,7 +134,7 @@ export const games: Game[] = [
   {
     id: '11',
     title: 'Death Stranding',
-    platform: 'PC',
+    platforms: ['PC'],
     status: 'abandonné',
     rating: 5,
     hours: 20,
@@ -145,7 +145,7 @@ export const games: Game[] = [
   {
     id: '12',
     title: 'Ghost of Tsushima',
-    platform: 'PS5',
+    platforms: ['PS5'],
     status: 'terminé',
     rating: 9,
     hours: 50,
@@ -156,7 +156,7 @@ export const games: Game[] = [
   {
     id: '13',
     title: 'Lies of P',
-    platform: 'PC',
+    platforms: ['PC'],
     status: 'terminé',
     rating: 8,
     hours: 35,
@@ -167,7 +167,7 @@ export const games: Game[] = [
   {
     id: '14',
     title: 'Alan Wake 2',
-    platform: 'PC',
+    platforms: ['PC'],
     status: 'liste de souhaits',
     year: 2023,
     genre: 'Survival Horror',
@@ -175,7 +175,7 @@ export const games: Game[] = [
   {
     id: '15',
     title: 'Sekiro',
-    platform: 'PC',
+    platforms: ['PC'],
     status: 'terminé',
     rating: 9.5,
     hours: 55,

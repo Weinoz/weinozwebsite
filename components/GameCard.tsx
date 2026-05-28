@@ -34,7 +34,7 @@ interface Props {
 export default function GameCard({ game, onClick }: Props) {
   const status = statusConfig[game.status];
   const hue = titleToHue(game.title);
-  const platformColor = platformColors[game.platform] ?? '#a78bfa';
+  const platformColor = platformColors[game.platforms[0]] ?? '#a78bfa';
 
   return (
     <div
@@ -111,7 +111,7 @@ export default function GameCard({ game, onClick }: Props) {
             letterSpacing: '0.04em',
           }}
         >
-          {game.platform}
+          {game.platforms.join(' · ')}
         </span>
 
         {/* Rating */}

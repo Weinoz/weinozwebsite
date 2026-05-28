@@ -19,11 +19,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: game.title,
     description: game.comment
-      ? `"${game.comment}" — ${game.platform} · ${game.status}`
-      : `${game.title} · ${game.platform} · ${game.status}`,
+      ? `"${game.comment}" — ${game.platforms.join(' · ')} · ${game.status}`
+      : `${game.title} · ${game.platforms.join(' · ')} · ${game.status}`,
     openGraph: {
       title: `${game.title} — WEINOZ`,
-      description: game.comment ?? `${game.title} · ${game.platform}`,
+      description: game.comment ?? `${game.title} · ${game.platforms.join(' · ')}`,
       images: game.cover ? [{ url: game.cover, width: 1280, height: 720 }] : [],
     },
   };
@@ -90,7 +90,7 @@ export default async function GamePage({ params }: Props) {
               padding: '0.25rem 0.8rem', borderRadius: '100px', fontSize: '0.72rem', fontWeight: 600,
               background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.1)',
             }}>
-              {game.platform}
+              {game.platforms.join(' · ')}
             </span>
           </div>
           <h1 style={{ fontWeight: 900, fontSize: 'clamp(2rem, 6vw, 3.5rem)', color: 'white', letterSpacing: '-0.03em', lineHeight: 1.1 }}>

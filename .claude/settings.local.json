@@ -15,7 +15,8 @@
       "Bash(npx next *)",
       "Bash(git push *)",
       "Bash(vercel env *)",
-      "Bash(npx vercel *)"
+      "Bash(npx vercel *)",
+      "Bash(mkdir -p \"D:\\\\weinozwebsite\\\\app\\\\api\\\\steam\\\\details\\\\[id]\")"
     ]
   }
 }

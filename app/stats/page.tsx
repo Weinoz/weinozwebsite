@@ -90,7 +90,9 @@ export default async function StatsPage() {
   // ── plateformes ──
   const platformMap = new Map<string, number>();
   for (const g of games) {
-    platformMap.set(g.platform, (platformMap.get(g.platform) ?? 0) + 1);
+    for (const p of g.platforms) {
+      platformMap.set(p, (platformMap.get(p) ?? 0) + 1);
+    }
   }
   const platforms = [...platformMap.entries()].sort((a, b) => b[1] - a[1]);
 
