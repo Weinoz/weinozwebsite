@@ -85,10 +85,13 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   const [manualTitle, setManualTitle] = useState('');
   const [manualCover, setManualCover] = useState('');
 
+  // Custom cover URL override (for add & edit modes)
+  const [coverUrlOverride, setCoverUrlOverride] = useState('');
+
   // Panel cover + title display
-  const panelCover  = panelMode === 'add' ? selectedRawg?.background_image
+  const panelCover  = panelMode === 'add'    ? (coverUrlOverride.trim() || selectedRawg?.background_image)
                     : panelMode === 'manual' ? (manualCover.trim() || undefined)
-                    : editingGame?.cover;
+                    : (coverUrlOverride.trim() || editingGame?.cover);
   const panelTitle  = panelMode === 'add' ? selectedRawg?.name
                     : panelMode === 'manual' ? (manualTitle || 'Nouveau jeu')
                     : editingGame?.title;
@@ -115,7 +118,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
     setPlatform('PC'); setStatus('terminé'); setTier(undefined);
     setRating(''); setHours(''); setComment(''); setStoreUrl('');
     setLinkedVideos([]); setVideoInput('');
-    setManualTitle(''); setManualCover('');
+    setManualTitle(''); setManualCover(''); setCoverUrlOverride('');
   }
 
   function closePanel() {
@@ -150,6 +153,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
     setStoreUrl(g.storeUrl ?? '');
     setLinkedVideos(g.linkedVideos ?? []);
     setVideoInput('');
+    setCoverUrlOverride(g.cover ?? '');
     setPanelMode('edit');
   }
 
@@ -171,7 +175,8 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
       panelMode === 'add' ? {
         id: `rawg-${selectedRawg!.id}`,
         title: selectedRawg!.name,
-        cover: selectedRawg!.background_image ?? undefined,
+        cover: coverUrlOverride.trim() || selectedRawg!.background_image || undefined,
+        rawgId: selectedRawg!.id,
         year: selectedRawg!.released ? new Date(selectedRawg!.released).getFullYear() : undefined,
         genre: selectedRawg!.genres?.[0]?.name,
         ...sharedFields,
@@ -184,6 +189,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
       }
       : {
         ...editingGame!,
+        cover: coverUrlOverride.trim() || editingGame!.cover,
         ...sharedFields,
       };
 
@@ -729,6 +735,26 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                   <X className="w-4 h-4" />
                 </button>
               </div>
+
+              {/* Cover URL input — manual mode has its own, add/edit share this one */}
+              {(panelMode === 'add' || panelMode === 'edit') && (
+                <div>
+                  <label className="section-label" style={{ display: 'block', marginBottom: '0.4rem' }}>
+                    URL de la cover {panelMode === 'add' ? '(remplace celle de RAWG)' : ''}
+                  </label>
+                  <input
+                    type="url"
+                    value={coverUrlOverride}
+                    onChange={(e) => setCoverUrlOverride(e.target.value)}
+                    placeholder="https://… (colle un lien image)"
+                    style={{
+                      width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px',
+                      border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)',
+                      color: 'white', fontSize: '0.82rem', outline: 'none',
+                    }}
+                  />
+                </div>
+              )}
 
               {/* Cover URL input (manual only) */}
               {panelMode === 'manual' && (
