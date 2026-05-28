@@ -93,3 +93,41 @@ export async function saveSiteConfig(config: SiteConfig): Promise<void> {
   if (!configured()) return;
   await redis(['SET', CONFIG_KEY, JSON.stringify(config)]);
 }
+
+// ── Stream game log (Twitch live → game mapping) ──────────────────────────────
+// Keeps a record of stream_id → game so VODs can be matched after the stream ends.
+const STREAM_GAMES_KEY = 'weinoz:stream_games';
+
+export interface StreamGameEntry {
+  gameName: string;  // Twitch game_name (official title)
+  twitchGameId: string;
+  recordedAt: string; // ISO date
+}
+
+export async function getStreamGames(): Promise<Record<string, StreamGameEntry>> {
+  if (!configured()) return {};
+  try {
+    const raw = await redis(['GET', STREAM_GAMES_KEY]);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<string, StreamGameEntry>;
+  } catch {
+    return {};
+  }
+}
+
+export async function saveStreamGame(
+  streamId: string,
+  gameName: string,
+  twitchGameId: string,
+): Promise<void> {
+  if (!configured()) return;
+  const existing = await getStreamGames();
+  existing[streamId] = { gameName, twitchGameId, recordedAt: new Date().toISOString() };
+  // Keep at most 100 entries (most recent first)
+  const trimmed = Object.fromEntries(
+    Object.entries(existing)
+      .sort((a, b) => b[1].recordedAt.localeCompare(a[1].recordedAt))
+      .slice(0, 100),
+  );
+  await redis(['SET', STREAM_GAMES_KEY, JSON.stringify(trimmed)]);
+}

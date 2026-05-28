@@ -42,6 +42,16 @@ export function findGameForVideo(videoTitle: string, games: Game[]): Game | null
 }
 
 /**
+ * Find a game in the library whose normalized title matches `name` exactly.
+ * Used for Twitch category names (e.g. "Elden Ring") and YouTube tags.
+ */
+export function findGameByName(name: string, games: Game[]): Game | null {
+  const normName = normalize(name);
+  if (normName.length < 3) return null;
+  return games.find((g) => normalize(g.title) === normName) ?? null;
+}
+
+/**
  * Match a list of videos against the game library.
  * Returns Map<gameId, newUrls[]> — only URLs not already in
  * game.linkedVideos are included.

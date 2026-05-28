@@ -5,6 +5,7 @@ export interface Video {
   title: string;
   platform: VideoPlatform;
   videoId?: string;     // YouTube video ID
+  streamId?: string;    // Twitch stream ID (links a VOD to a live session)
   thumbnail?: string;   // URL custom (Twitch, etc.)
   url: string;
   date: string;

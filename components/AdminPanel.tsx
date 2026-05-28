@@ -5,7 +5,7 @@ import { Game, GameStatus, GamePlatform, GameTier } from '@/data/games';
 import { RawgGame } from '@/lib/rawg';
 import { SiteConfig } from '@/lib/redis';
 import { SteamSearchHit, SteamGameInfo } from '@/lib/steam';
-import { addGameAction, removeGameAction, logoutAction, setTopGamesAction, saveSiteConfigAction, syncVideoLinksAction } from '@/app/admin/actions';
+import { addGameAction, removeGameAction, logoutAction, setTopGamesAction, saveSiteConfigAction, syncVideoLinksAction, fetchVideosForAdminAction, linkVideoToGameAction, AdminVideo } from '@/app/admin/actions';
 import { Star, Clock, Trash2, Plus, Search, X, LogOut, Gamepad2, Pencil, ExternalLink, Link, Video, RefreshCw, Trophy, User, Monitor, Mic } from 'lucide-react';
 
 const PLATFORMS: GamePlatform[] = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Switch', 'Mobile'];
@@ -28,7 +28,7 @@ const STATUSES: { value: GameStatus; label: string; color: string }[] = [
 interface Props { initialGames: Game[]; initialTopIds: string[]; initialConfig: SiteConfig }
 
 type PanelMode = 'add' | 'edit' | 'manual' | null;
-type AdminTab = 'games' | 'about';
+type AdminTab = 'games' | 'about' | 'videos';
 
 export default function AdminPanel({ initialGames, initialTopIds, initialConfig }: Props) {
   const [activeTab, setActiveTab] = useState<AdminTab>('games');
@@ -77,6 +77,15 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   const [syncing, setSyncing] = useState<string | null>(null); // game id being synced
   const [linkingVideos, setLinkingVideos] = useState(false);
   const [linkResult, setLinkResult] = useState<string | null>(null);
+
+  // ── Videos tab state ─────────────────────────────────────────────────────
+  const [adminVideos, setAdminVideos] = useState<AdminVideo[]>([]);
+  const [videosLoading, setVideosLoading] = useState(false);
+  const [liveGame, setLiveGame] = useState<{ streamId: string; gameName: string } | undefined>();
+  const [videoPlatformFilter, setVideoPlatformFilter] = useState<'all' | 'youtube' | 'twitch'>('all');
+  const [savingVideoId, setSavingVideoId] = useState<string | null>(null);
+  // Pending game assignment per video id (before user clicks save)
+  const [pendingAssign, setPendingAssign] = useState<Record<string, string | null>>({});
 
   // Cover picker
   const [coverPickerGame, setCoverPickerGame] = useState<Game | null>(null);
@@ -338,6 +347,41 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
     }
   }
 
+  async function loadAdminVideos() {
+    setVideosLoading(true);
+    try {
+      const { videos, liveGame: live } = await fetchVideosForAdminAction();
+      setAdminVideos(videos);
+      setLiveGame(live);
+      setPendingAssign({});
+    } catch { /* ignore */ }
+    finally { setVideosLoading(false); }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'videos' && adminVideos.length === 0 && !videosLoading) {
+      loadAdminVideos();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  async function saveVideoAssignment(video: AdminVideo, gameId: string | null) {
+    setSavingVideoId(video.id);
+    try {
+      await linkVideoToGameAction(video.url, gameId);
+      setAdminVideos((prev) => prev.map((v) => {
+        if (v.id !== video.id) return v;
+        if (gameId === null) {
+          return { ...v, currentGameId: undefined, currentGameTitle: undefined, detectedGameId: v.detectedGameId, detectedGameTitle: v.detectedGameTitle };
+        }
+        const g = games.find((x) => x.id === gameId);
+        return { ...v, currentGameId: gameId, currentGameTitle: g?.title ?? gameId, detectedGameId: undefined, detectedGameTitle: undefined };
+      }));
+      setPendingAssign((p) => { const n = { ...p }; delete n[video.id]; return n; });
+    } catch { /* ignore */ }
+    finally { setSavingVideoId(null); }
+  }
+
   async function runVideoSync() {
     setLinkingVideos(true);
     setLinkResult(null);
@@ -438,8 +482,9 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '2rem', background: 'rgba(255,255,255,0.04)', padding: '0.25rem', borderRadius: '10px', width: 'fit-content' }}>
         {([
-          { id: 'games', label: 'Jeux-Vidéothèque', icon: Gamepad2 },
-          { id: 'about', label: 'Page À propos',    icon: User     },
+          { id: 'games',  label: 'Jeux-Vidéothèque', icon: Gamepad2 },
+          { id: 'about',  label: 'Page À propos',    icon: User     },
+          { id: 'videos', label: 'Vidéos',           icon: Video    },
         ] as { id: AdminTab; label: string; icon: React.ElementType }[]).map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setActiveTab(id)} style={{
             display: 'flex', alignItems: 'center', gap: '0.4rem',
@@ -524,6 +569,217 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
           }}>
             {isPendingConfig ? 'Sauvegarde…' : configSaved ? '✓ Sauvegardé !' : 'Enregistrer la page À propos'}
           </button>
+        </div>
+      )}
+
+      {/* ── TAB: VIDÉOS ── */}
+      {activeTab === 'videos' && (
+        <div>
+          {/* Live indicator */}
+          {liveGame && (
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+              padding: '0.35rem 0.85rem', borderRadius: '100px', marginBottom: '1.5rem',
+              background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
+            }}>
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#ef4444', flexShrink: 0, animation: 'pulse 1.5s infinite' }} />
+              <span style={{ fontSize: '0.8rem', color: '#fca5a5', fontWeight: 700 }}>
+                En direct · {liveGame.gameName}
+              </span>
+            </div>
+          )}
+
+          {/* Header row */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', gap: '0.75rem', flexWrap: 'wrap' }}>
+            {/* Platform filter tabs */}
+            <div style={{ display: 'flex', gap: '0.2rem', background: 'rgba(255,255,255,0.04)', padding: '0.2rem', borderRadius: '8px' }}>
+              {(['all', 'youtube', 'twitch'] as const).map((f) => (
+                <button key={f} onClick={() => setVideoPlatformFilter(f)} style={{
+                  padding: '0.3rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600,
+                  border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                  background: videoPlatformFilter === f ? 'rgba(160,32,240,0.25)' : 'transparent',
+                  color: videoPlatformFilter === f ? '#c084fc' : 'rgba(255,255,255,0.35)',
+                }}>
+                  {f === 'all' ? 'Toutes' : f === 'youtube' ? '▶ YouTube' : '🎮 Twitch'}
+                </button>
+              ))}
+            </div>
+            <button onClick={loadAdminVideos} disabled={videosLoading} style={{
+              display: 'flex', alignItems: 'center', gap: '0.35rem',
+              padding: '0.35rem 0.8rem', borderRadius: '7px', fontSize: '0.75rem', fontWeight: 600,
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+              color: 'rgba(255,255,255,0.4)', cursor: videosLoading ? 'not-allowed' : 'pointer',
+            }}>
+              <RefreshCw className="w-3 h-3" style={{ animation: videosLoading ? 'spin 1s linear infinite' : 'none' }} />
+              Actualiser
+            </button>
+          </div>
+
+          {videosLoading && (
+            <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: '0.85rem', textAlign: 'center', padding: '4rem 0' }}>
+              Chargement des vidéos…
+            </p>
+          )}
+
+          {!videosLoading && adminVideos.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '4rem 0' }}>
+              <Video className="w-8 h-8" style={{ color: 'rgba(255,255,255,0.1)', margin: '0 auto 0.75rem' }} />
+              <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: '0.85rem' }}>
+                Aucune vidéo détectée. Vérifie que tes variables d&apos;environnement YouTube / Twitch sont configurées.
+              </p>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            {adminVideos
+              .filter((v) => videoPlatformFilter === 'all' || v.platform === videoPlatformFilter)
+              .map((v) => {
+                const pending = pendingAssign[v.id]; // undefined = not changed, null = délier, string = new gameId
+                const hasPending = v.id in pendingAssign;
+                const isSaving = savingVideoId === v.id;
+
+                const assignedGame = hasPending
+                  ? (pending ? games.find((g) => g.id === pending) : null)
+                  : (v.currentGameId ? games.find((g) => g.id === v.currentGameId) : null);
+
+                return (
+                  <div key={v.id} style={{
+                    display: 'flex', gap: '0.75rem',
+                    padding: '0.75rem', borderRadius: '12px',
+                    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
+                    alignItems: 'flex-start',
+                  }}>
+                    {/* Thumbnail */}
+                    {v.thumbnail ? (
+                      <img src={v.thumbnail} alt="" style={{ width: '90px', aspectRatio: '16/9', objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: '90px', aspectRatio: '16/9', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Video className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.15)' }} />
+                      </div>
+                    )}
+
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <p style={{ fontSize: '0.83rem', fontWeight: 600, color: 'rgba(255,255,255,0.85)', lineHeight: 1.35, flex: 1, minWidth: 0 }}>
+                          {v.title}
+                        </p>
+                        {/* Platform badge */}
+                        <span style={{
+                          fontSize: '0.62rem', fontWeight: 700, padding: '0.1rem 0.45rem',
+                          borderRadius: '4px', flexShrink: 0,
+                          background: v.platform === 'youtube' ? 'rgba(239,68,68,0.15)' : 'rgba(145,70,255,0.15)',
+                          color: v.platform === 'youtube' ? '#fca5a5' : '#c084fc',
+                        }}>
+                          {v.platform === 'youtube' ? 'YouTube' : 'Twitch'}
+                        </span>
+                      </div>
+
+                      <p style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.25)', marginTop: '0.2rem' }}>
+                        {v.date}{v.duration ? ` · ${v.duration}` : ''}{v.views ? ` · ${v.views} vues` : ''}
+                      </p>
+
+                      {/* Game assignment row */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.55rem', flexWrap: 'wrap' }}>
+                        {/* Current / pending assignment badge */}
+                        {assignedGame ? (
+                          <span style={{
+                            fontSize: '0.7rem', fontWeight: 700, padding: '0.15rem 0.55rem',
+                            borderRadius: '5px',
+                            background: hasPending ? 'rgba(234,179,8,0.15)' : 'rgba(34,197,94,0.15)',
+                            color: hasPending ? '#fde047' : '#86efac',
+                            border: `1px solid ${hasPending ? 'rgba(234,179,8,0.3)' : 'rgba(34,197,94,0.3)'}`,
+                          }}>
+                            {hasPending ? '→ ' : '✓ '}{assignedGame.title}
+                          </span>
+                        ) : v.detectedGameTitle && !hasPending ? (
+                          <span style={{
+                            fontSize: '0.7rem', fontWeight: 600, padding: '0.15rem 0.55rem',
+                            borderRadius: '5px',
+                            background: 'rgba(99,102,241,0.12)', color: 'rgba(165,180,252,0.7)',
+                            border: '1px solid rgba(99,102,241,0.2)',
+                          }}>
+                            🔍 {v.detectedGameTitle}
+                          </span>
+                        ) : (
+                          !hasPending && (
+                            <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.2)' }}>Non lié</span>
+                          )
+                        )}
+
+                        {/* Dropdown */}
+                        <select
+                          value={hasPending ? (pending ?? '') : (v.currentGameId ?? '')}
+                          onChange={(e) => setPendingAssign((p) => ({ ...p, [v.id]: e.target.value || null }))}
+                          style={{
+                            padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem',
+                            background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)',
+                            color: 'rgba(255,255,255,0.6)', cursor: 'pointer', maxWidth: '160px',
+                          }}
+                        >
+                          <option value="">— Délier —</option>
+                          {/* Suggested first if auto-detected */}
+                          {v.detectedGameId && !v.currentGameId && (
+                            <option value={v.detectedGameId}>⚡ {v.detectedGameTitle}</option>
+                          )}
+                          {[...games]
+                            .sort((a, b) => a.title.localeCompare(b.title))
+                            .filter((g) => g.id !== v.detectedGameId || v.currentGameId)
+                            .map((g) => (
+                              <option key={g.id} value={g.id}>{g.title}</option>
+                            ))
+                          }
+                        </select>
+
+                        {/* Save button — only shows when there's a pending change */}
+                        {hasPending && (
+                          <button
+                            onClick={() => saveVideoAssignment(v, pending ?? null)}
+                            disabled={isSaving}
+                            style={{
+                              padding: '0.2rem 0.7rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700,
+                              background: 'rgba(160,32,240,0.25)', border: '1px solid rgba(160,32,240,0.5)',
+                              color: '#c084fc', cursor: isSaving ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            {isSaving ? '…' : 'Enregistrer'}
+                          </button>
+                        )}
+
+                        {/* Apply detected game shortcut */}
+                        {v.detectedGameId && !v.currentGameId && !hasPending && (
+                          <button
+                            onClick={() => saveVideoAssignment(v, v.detectedGameId!)}
+                            disabled={isSaving}
+                            title={`Lier à ${v.detectedGameTitle}`}
+                            style={{
+                              padding: '0.2rem 0.6rem', borderRadius: '6px', fontSize: '0.68rem', fontWeight: 600,
+                              background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
+                              color: '#a5b4fc', cursor: 'pointer',
+                            }}
+                          >
+                            Appliquer
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* External link */}
+                    <a href={v.url} target="_blank" rel="noopener noreferrer"
+                      style={{ color: 'rgba(255,255,255,0.2)', flexShrink: 0, padding: '0.1rem' }}>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                );
+              })}
+          </div>
+
+          {!videosLoading && adminVideos.length > 0 && (
+            <p style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.15)', marginTop: '1.5rem', textAlign: 'center' }}>
+              {adminVideos.length} vidéo{adminVideos.length > 1 ? 's' : ''} détectée{adminVideos.length > 1 ? 's' : ''} ·
+              Les jeux avec 🔍 sont des suggestions automatiques (titre, tags, catégorie Twitch)
+            </p>
+          )}
         </div>
       )}
 

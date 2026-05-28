@@ -45,6 +45,36 @@ function formatViews(n: number): string {
   return String(n);
 }
 
+/** Check if the user is currently live and return the stream game (for game-capture logic). */
+export async function fetchTwitchLiveStream(
+  clientId: string,
+  clientSecret: string,
+  login: string,
+): Promise<{ streamId: string; gameName: string; twitchGameId: string } | null> {
+  const token = await getToken(clientId, clientSecret);
+  if (!token) return null;
+  try {
+    const res = await fetch(
+      `https://api.twitch.tv/helix/streams?user_login=${login}`,
+      {
+        headers: { 'Client-ID': clientId, Authorization: `Bearer ${token}` },
+        cache: 'no-store', // always fresh — we need to know right now
+      },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const stream = data.data?.[0];
+    if (!stream || !stream.game_name) return null;
+    return {
+      streamId: stream.id,
+      gameName: stream.game_name,
+      twitchGameId: stream.game_id ?? '',
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchTwitchVideos(
   clientId: string,
   clientSecret: string,
@@ -72,6 +102,7 @@ export async function fetchTwitchVideos(
       id: `twitch-${v.id}`,
       title: v.title,
       platform: 'twitch' as const,
+      streamId: v.stream_id ?? undefined, // links the VOD back to its live session
       url: v.url,
       date: v.created_at.split('T')[0],
       duration: parseDuration(v.duration),

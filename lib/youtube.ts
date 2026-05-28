@@ -46,3 +46,32 @@ function formatViews(n: number): string {
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
 }
+
+/**
+ * Fetch the tags array for a batch of YouTube video IDs using the Data API v3.
+ * Requires a YOUTUBE_API_KEY.  Returns Map<videoId, tags[]>.
+ * Tags often contain the game title when the creator has tagged the video properly.
+ */
+export async function fetchYouTubeVideoTags(
+  videoIds: string[],
+  apiKey: string,
+): Promise<Map<string, string[]>> {
+  if (!videoIds.length) return new Map();
+  try {
+    const ids = videoIds.slice(0, 50).join(','); // API max = 50 per call
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${ids}&key=${encodeURIComponent(apiKey)}`,
+      { next: { revalidate: 3600 } },
+    );
+    if (!res.ok) return new Map();
+    const data = await res.json();
+    const result = new Map<string, string[]>();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const item of (data.items ?? []) as any[]) {
+      result.set(item.id as string, (item.snippet?.tags as string[]) ?? []);
+    }
+    return result;
+  } catch {
+    return new Map();
+  }
+}
