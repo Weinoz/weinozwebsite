@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useTransition } from 'react';
 import { Game, GameStatus, GamePlatform } from '@/data/games';
 import { RawgGame } from '@/lib/rawg';
 import { addGameAction, removeGameAction, logoutAction } from '@/app/admin/actions';
-import { Star, Clock, Trash2, Plus, Search, X, LogOut, Gamepad2, Pencil, ExternalLink, Link, Video } from 'lucide-react';
+import { Star, Clock, Trash2, Plus, Search, X, LogOut, Gamepad2, Pencil, ExternalLink, Link, Video, RefreshCw } from 'lucide-react';
 
 const PLATFORMS: GamePlatform[] = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Switch', 'Mobile'];
 const STATUSES: { value: GameStatus; label: string; color: string }[] = [
@@ -45,6 +45,7 @@ export default function AdminPanel({ initialGames }: Props) {
   const [videoInput, setVideoInput] = useState('');
 
   const [isPending, startTransition] = useTransition();
+  const [syncing, setSyncing] = useState<string | null>(null); // game id being synced
 
   // Panel cover + title display
   const panelCover  = panelMode === 'add' ? selectedRawg?.background_image  : editingGame?.cover;
@@ -137,6 +138,34 @@ export default function AdminPanel({ initialGames }: Props) {
       closePanel();
       if (panelMode === 'add') { setQuery(''); setResults([]); }
     });
+  }
+
+  async function syncGameCover(game: Game) {
+    setSyncing(game.id);
+    try {
+      const res = await fetch(`/api/rawg?q=${encodeURIComponent(game.title)}`);
+      const results: RawgGame[] = await res.json();
+      if (!results.length) return;
+      const rawg = results[0];
+      const updated: Game = {
+        ...game,
+        cover: rawg.background_image ?? game.cover,
+        rawgId: rawg.id,
+        genre: game.genre ?? rawg.genres?.[0]?.name,
+        year: game.year ?? (rawg.released ? new Date(rawg.released).getFullYear() : undefined),
+      };
+      await addGameAction(updated);
+      setGames((prev) => prev.map((g) => g.id === game.id ? updated : g));
+    } catch { /* ignore */ }
+    finally { setSyncing(null); }
+  }
+
+  async function syncAllCovers() {
+    const toSync = games.filter((g) => !g.cover && !g.rawgId && !g.id.startsWith('rawg-'));
+    for (const game of toSync) {
+      await syncGameCover(game);
+      await new Promise((r) => setTimeout(r, 300)); // small delay between calls
+    }
   }
 
   function handleRemove(id: string) {
@@ -238,7 +267,25 @@ export default function AdminPanel({ initialGames }: Props) {
 
           {/* Library */}
           <div>
-            <p className="section-label" style={{ marginBottom: '1rem' }}>Ma bibliothèque ({games.length})</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <p className="section-label">Ma bibliothèque ({games.length})</p>
+              {games.some((g) => !g.cover && !g.rawgId && !g.id.startsWith('rawg-')) && (
+                <button
+                  onClick={syncAllCovers}
+                  disabled={!!syncing}
+                  title="Synchroniser les covers manquantes depuis RAWG"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '0.35rem',
+                    padding: '0.3rem 0.7rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600,
+                    background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.3)',
+                    color: '#67e8f9', cursor: syncing ? 'not-allowed' : 'pointer', opacity: syncing ? 0.5 : 1,
+                  }}
+                >
+                  <RefreshCw className="w-3 h-3" style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
+                  Sync covers
+                </button>
+              )}
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {games.map((g) => (
                 <div key={g.id} style={{
@@ -265,6 +312,13 @@ export default function AdminPanel({ initialGames }: Props) {
                   </div>
                   {/* Actions */}
                   <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
+                    {/* Sync cover button — only for games without RAWG link */}
+                    {!g.cover && !g.rawgId && !g.id.startsWith('rawg-') && (
+                      <button onClick={() => syncGameCover(g)} disabled={!!syncing} title="Trouver la cover sur RAWG"
+                        style={{ background: 'none', border: 'none', color: 'rgba(6,182,212,0.5)', cursor: 'pointer', padding: '0.25rem' }}>
+                        <RefreshCw className="w-4 h-4" style={{ animation: syncing === g.id ? 'spin 1s linear infinite' : 'none' }} />
+                      </button>
+                    )}
                     {g.storeUrl && (
                       <a href={g.storeUrl} target="_blank" rel="noopener noreferrer"
                         style={{ background: 'none', border: 'none', color: 'rgba(160,32,240,0.5)', cursor: 'pointer', padding: '0.25rem', display: 'flex' }}

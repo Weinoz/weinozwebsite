@@ -6,10 +6,14 @@ import { X, Star, Clock, ExternalLink, Play, ChevronLeft, ChevronRight } from 'l
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function getRawgId(gameId: string): number | null {
-  if (!gameId.startsWith('rawg-')) return null;
-  const n = parseInt(gameId.slice(5));
-  return isNaN(n) ? null : n;
+function getRawgId(game: Game): number | null {
+  // Games added via admin have IDs like "rawg-12345"
+  if (game.id.startsWith('rawg-')) {
+    const n = parseInt(game.id.slice(5));
+    if (!isNaN(n)) return n;
+  }
+  // Games synced via the admin sync button have a rawgId field
+  return game.rawgId ?? null;
 }
 
 function getYouTubeId(url: string): string | null {
@@ -77,7 +81,7 @@ export default function GameModal({ game, onClose }: Props) {
 
   // Fetch RAWG screenshots
   useEffect(() => {
-    const rawgId = getRawgId(game.id);
+    const rawgId = getRawgId(game);
     if (!rawgId) return;
     fetch(`/api/rawg/${rawgId}/screenshots`)
       .then(r => r.json())

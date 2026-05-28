@@ -14,6 +14,7 @@ export interface Game {
   genre?: string;
   storeUrl?: string;
   linkedVideos?: string[]; // YouTube / Twitch URLs
+  rawgId?: number;         // RAWG game ID (for screenshots in modal)
 }
 
 // ─── REMPLACE / COMPLÈTE AVEC TES VRAIS JEUX ────────────────────────────────
