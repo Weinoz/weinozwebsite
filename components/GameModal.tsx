@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Game } from '@/data/games';
-import { X, Star, Clock, ExternalLink, Play, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Star, Clock, ExternalLink, Play, ChevronLeft, ChevronRight, Share2, Check } from 'lucide-react';
+import { gameSlug } from '@/lib/utils';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,15 @@ interface Props {
 export default function GameModal({ game, onClose }: Props) {
   const [screenshots, setScreenshots] = useState<string[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  function share() {
+    const url = `https://weinoz.com/jeux/${gameSlug(game.title)}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
 
   const allImages: string[] = [
     ...(game.cover ? [game.cover] : []),
@@ -279,7 +289,23 @@ export default function GameModal({ game, onClose }: Props) {
               </div>
             )}
 
-            {/* Store link */}
+            {/* Share + Store */}
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={share}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                  padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer',
+                  background: copied ? 'rgba(34,197,94,0.12)' : 'rgba(160,32,240,0.12)',
+                  border: `1px solid ${copied ? 'rgba(34,197,94,0.3)' : 'rgba(160,32,240,0.3)'}`,
+                  color: copied ? '#86efac' : '#c084fc', fontSize: '0.82rem', fontWeight: 600,
+                  transition: 'all 0.2s',
+                }}
+              >
+                {copied ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
+                {copied ? 'Lien copié !' : 'Partager la fiche'}
+              </button>
+
             {game.storeUrl && (
               <a
                 href={game.storeUrl} target="_blank" rel="noopener noreferrer"
@@ -295,6 +321,7 @@ export default function GameModal({ game, onClose }: Props) {
                 Voir / acheter le jeu
               </a>
             )}
+            </div>
 
             {/* Linked videos */}
             {game.linkedVideos && game.linkedVideos.length > 0 && (

@@ -8,7 +8,7 @@ import {
 } from '@/components/SocialIcons';
 import { fetchYouTubeVideos } from '@/lib/youtube';
 import { fetchTwitchVideos } from '@/lib/twitch';
-import { getGames } from '@/lib/redis';
+import { getGames, getTopGameIds } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +22,7 @@ const socialPlatforms = [
 ];
 
 export default async function HomePage() {
-  const [youtubeVideos, twitchVideos, allGames] = await Promise.all([
+  const [youtubeVideos, twitchVideos, allGames, topIds] = await Promise.all([
     process.env.YOUTUBE_CHANNEL_ID
       ? fetchYouTubeVideos(process.env.YOUTUBE_CHANNEL_ID)
       : Promise.resolve([]),
@@ -30,7 +30,12 @@ export default async function HomePage() {
       ? fetchTwitchVideos(process.env.TWITCH_CLIENT_ID, process.env.TWITCH_CLIENT_SECRET, process.env.TWITCH_LOGIN)
       : Promise.resolve([]),
     getGames(),
+    getTopGameIds(),
   ]);
+
+  const topGames = topIds
+    .map((id) => allGames.find((g) => g.id === id))
+    .filter(Boolean) as (typeof allGames)[number][];
 
   const featuredVideos = [...youtubeVideos, ...twitchVideos]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -151,6 +156,29 @@ export default async function HomePage() {
           )}
         </div>
       </section>
+
+      {/* ── MON TOP 5 ── */}
+      {topGames.length > 0 && (
+        <section style={{ background: '#0E0018', padding: '5rem 0' }}>
+          <div className="max-w-7xl mx-auto px-5 sm:px-8">
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '2.5rem' }}>
+              <div>
+                <p className="section-label mb-2">Sélection personnelle</p>
+                <h2 style={{ fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', fontWeight: 900, color: 'white', letterSpacing: '-0.03em', lineHeight: 1 }}>
+                  Mon Top {topGames.length}
+                </h2>
+              </div>
+              <Link href="/jeux" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', fontWeight: 600, color: 'rgba(160,32,240,0.8)', whiteSpace: 'nowrap' }}
+                className="hover:text-purple-400 transition-colors">
+                Tout voir <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+            <div className={`grid gap-4 ${topGames.length <= 3 ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5'}`}>
+              {topGames.map((g) => <GameCard key={g.id} game={g} />)}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── RÉSEAUX ── */}
       <section style={{ background: 'var(--purple-ink)', padding: '5rem 0' }}>

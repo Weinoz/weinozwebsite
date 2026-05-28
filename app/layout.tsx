@@ -8,14 +8,23 @@ const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] });
 const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: { default: 'Weinoz', template: '%s — Weinoz' },
-  description: 'Créateur de contenu gaming. Retrouve mes vidéos, streams et ma jeux-vidéothèque.',
+  title: { default: 'WEINOZ', template: '%s — WEINOZ' },
+  description: 'Gaming & bonne humeur 🧦 — Viens te détendre, mets tes pantoufles et poses-toi.',
+  keywords: ['weinoz', 'gaming', 'twitch', 'youtube', 'jeux vidéo', 'stream', 'gaming fr'],
   openGraph: {
-    title: 'Weinoz',
-    description: 'Créateur de contenu gaming.',
+    title: 'WEINOZ',
+    description: 'Gaming & bonne humeur 🧦 — Viens te détendre, mets tes pantoufles et poses-toi.',
     url: 'https://weinoz.com',
-    siteName: 'Weinoz',
+    siteName: 'WEINOZ',
+    locale: 'fr_FR',
+    type: 'website',
   },
+  twitter: {
+    card: 'summary_large_image',
+    site: '@weinoz_',
+    creator: '@weinoz_',
+  },
+  metadataBase: new URL('https://weinoz.com'),
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef, useTransition } from 'react';
 import { Game, GameStatus, GamePlatform } from '@/data/games';
 import { RawgGame } from '@/lib/rawg';
-import { addGameAction, removeGameAction, logoutAction } from '@/app/admin/actions';
-import { Star, Clock, Trash2, Plus, Search, X, LogOut, Gamepad2, Pencil, ExternalLink, Link, Video, RefreshCw } from 'lucide-react';
+import { addGameAction, removeGameAction, logoutAction, setTopGamesAction } from '@/app/admin/actions';
+import { Star, Clock, Trash2, Plus, Search, X, LogOut, Gamepad2, Pencil, ExternalLink, Link, Video, RefreshCw, Trophy } from 'lucide-react';
 
 const PLATFORMS: GamePlatform[] = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Switch', 'Mobile'];
 const STATUSES: { value: GameStatus; label: string; color: string }[] = [
@@ -15,12 +15,13 @@ const STATUSES: { value: GameStatus; label: string; color: string }[] = [
   { value: 'liste de souhaits', label: 'Wishlist',  color: '#eab308' },
 ];
 
-interface Props { initialGames: Game[] }
+interface Props { initialGames: Game[]; initialTopIds: string[] }
 
 type PanelMode = 'add' | 'edit' | null;
 
-export default function AdminPanel({ initialGames }: Props) {
+export default function AdminPanel({ initialGames, initialTopIds }: Props) {
   const [games, setGames] = useState<Game[]>(initialGames);
+  const [topIds, setTopIds] = useState<string[]>(initialTopIds);
 
   // Search
   const [query, setQuery] = useState('');
@@ -160,6 +161,14 @@ export default function AdminPanel({ initialGames }: Props) {
     finally { setSyncing(null); }
   }
 
+  async function toggleTop(id: string) {
+    const next = topIds.includes(id)
+      ? topIds.filter((t) => t !== id)
+      : topIds.length >= 5 ? topIds : [...topIds, id];
+    setTopIds(next);
+    await setTopGamesAction(next);
+  }
+
   async function syncAllCovers() {
     const toSync = games.filter((g) => !g.cover && !g.rawgId && !g.id.startsWith('rawg-'));
     for (const game of toSync) {
@@ -268,7 +277,12 @@ export default function AdminPanel({ initialGames }: Props) {
           {/* Library */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-              <p className="section-label">Ma bibliothèque ({games.length})</p>
+              <div>
+                <p className="section-label">Ma bibliothèque ({games.length})</p>
+                <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.25)', marginTop: '0.2rem' }}>
+                  <Star style={{ width: '0.6rem', height: '0.6rem', display: 'inline', verticalAlign: 'middle', color: '#facc15' }} /> Étoile = Mon Top 5 ({topIds.length}/5)
+                </p>
+              </div>
               {games.some((g) => !g.cover && !g.rawgId && !g.id.startsWith('rawg-')) && (
                 <button
                   onClick={syncAllCovers}
@@ -312,6 +326,19 @@ export default function AdminPanel({ initialGames }: Props) {
                   </div>
                   {/* Actions */}
                   <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
+                    {/* Top 5 star */}
+                    <button
+                      onClick={() => toggleTop(g.id)}
+                      disabled={!topIds.includes(g.id) && topIds.length >= 5}
+                      title={topIds.includes(g.id) ? 'Retirer du Top 5' : topIds.length >= 5 ? 'Top 5 plein' : 'Ajouter au Top 5'}
+                      style={{
+                        background: 'none', border: 'none', cursor: topIds.length >= 5 && !topIds.includes(g.id) ? 'not-allowed' : 'pointer',
+                        padding: '0.25rem', color: topIds.includes(g.id) ? '#facc15' : 'rgba(255,255,255,0.15)',
+                        opacity: !topIds.includes(g.id) && topIds.length >= 5 ? 0.3 : 1,
+                      }}
+                    >
+                      <Star className="w-4 h-4" style={{ fill: topIds.includes(g.id) ? '#facc15' : 'transparent' }} />
+                    </button>
                     {/* Sync cover button — only for games without RAWG link */}
                     {!g.cover && !g.rawgId && !g.id.startsWith('rawg-') && (
                       <button onClick={() => syncGameCover(g)} disabled={!!syncing} title="Trouver la cover sur RAWG"

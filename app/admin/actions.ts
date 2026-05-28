@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { getGames, saveGames } from '@/lib/redis';
+import { getGames, saveGames, saveTopGameIds } from '@/lib/redis';
 import { Game } from '@/data/games';
 
 export async function loginAction(_: unknown, formData: FormData) {
@@ -40,5 +40,10 @@ export async function removeGameAction(id: string) {
   const games = await getGames();
   await saveGames(games.filter((g) => g.id !== id));
   revalidatePath('/jeux');
+  revalidatePath('/');
+}
+
+export async function setTopGamesAction(ids: string[]) {
+  await saveTopGameIds(ids);
   revalidatePath('/');
 }

@@ -36,3 +36,22 @@ export async function saveGames(games: Game[]): Promise<void> {
   if (!configured()) return;
   await redis(['SET', KEY, JSON.stringify(games)]);
 }
+
+// ── Top games (curated list of up to 5 game IDs) ──────────────────────────────
+const TOP_KEY = 'weinoz:top';
+
+export async function getTopGameIds(): Promise<string[]> {
+  if (!configured()) return [];
+  try {
+    const raw = await redis(['GET', TOP_KEY]);
+    if (!raw) return [];
+    return JSON.parse(raw) as string[];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveTopGameIds(ids: string[]): Promise<void> {
+  if (!configured()) return;
+  await redis(['SET', TOP_KEY, JSON.stringify(ids.slice(0, 5))]);
+}
