@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Game } from '@/data/games';
-import { X, Star, Clock, ExternalLink, Play, ChevronLeft, ChevronRight, Share2, Check, Tag } from 'lucide-react';
+import { X, Star, Clock, ExternalLink, ChevronLeft, ChevronRight, Share2, Check, Tag } from 'lucide-react';
+import LinkedVideoCard from '@/components/LinkedVideoCard';
 import type { SteamPrice } from '@/lib/steam';
 import { gameSlug } from '@/lib/utils';
 
@@ -18,23 +19,6 @@ function getRawgId(game: Game): number | null {
   return game.rawgId ?? null;
 }
 
-function getYouTubeId(url: string): string | null {
-  const patterns = [
-    /youtu\.be\/([^?&/\s]+)/,
-    /youtube\.com\/watch\?.*v=([^&\s]+)/,
-    /youtube\.com\/embed\/([^?&/\s]+)/,
-    /youtube\.com\/shorts\/([^?&/\s]+)/,
-  ];
-  for (const p of patterns) {
-    const m = url.match(p);
-    if (m) return m[1];
-  }
-  return null;
-}
-
-function isTwitch(url: string) {
-  return url.includes('twitch.tv') || url.includes('clips.twitch.tv');
-}
 
 // ── Status config ─────────────────────────────────────────────────────────────
 
@@ -381,41 +365,9 @@ export default function GameModal({ game, onClose }: Props) {
                   Mes vidéos sur ce jeu
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {game.linkedVideos.map((url, i) => {
-                    const ytId = getYouTubeId(url);
-                    if (ytId) return (
-                      <div key={i} style={{ borderRadius: '10px', overflow: 'hidden', aspectRatio: '16/9' }}>
-                        <iframe
-                          src={`https://www.youtube-nocookie.com/embed/${ytId}`}
-                          title={`Vidéo ${i + 1}`}
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                          style={{ width: '100%', height: '100%', border: 'none' }}
-                        />
-                      </div>
-                    );
-                    if (isTwitch(url)) return (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{
-                        display: 'flex', alignItems: 'center', gap: '0.6rem',
-                        padding: '0.75rem 1rem', borderRadius: '10px',
-                        background: 'rgba(145,70,255,0.1)', border: '1px solid rgba(145,70,255,0.25)',
-                        color: '#c084fc', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600,
-                      }}>
-                        <Play className="w-4 h-4" /> Voir sur Twitch
-                      </a>
-                    );
-                    return (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{
-                        display: 'flex', alignItems: 'center', gap: '0.5rem',
-                        padding: '0.65rem 1rem', borderRadius: '10px',
-                        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-                        color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: '0.8rem',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>
-                        <ExternalLink className="w-4 h-4" style={{ flexShrink: 0 }} /> {url}
-                      </a>
-                    );
-                  })}
+                  {game.linkedVideos.map((url, i) => (
+                    <LinkedVideoCard key={i} url={url} index={i} />
+                  ))}
                 </div>
               </div>
             )}

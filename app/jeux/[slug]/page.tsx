@@ -5,6 +5,7 @@ import { getGames } from '@/lib/redis';
 import { gameSlug } from '@/lib/utils';
 import { extractSteamAppId, fetchSteamPrice } from '@/lib/steam';
 import { ArrowLeft, Star, Clock, ExternalLink, Tag } from 'lucide-react';
+import LinkedVideoCard from '@/components/LinkedVideoCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -206,28 +207,10 @@ export default async function GamePage({ params }: Props) {
             <p style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, marginBottom: '0.75rem' }}>
               Mes vidéos sur ce jeu
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {game.linkedVideos.map((url, i) => {
-                const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([^?&/\s]+)/);
-                if (ytMatch) return (
-                  <div key={i} style={{ borderRadius: '12px', overflow: 'hidden', aspectRatio: '16/9' }}>
-                    <iframe src={`https://www.youtube-nocookie.com/embed/${ytMatch[1]}`}
-                      title={`Vidéo ${i + 1}`} allowFullScreen
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      style={{ width: '100%', height: '100%', border: 'none' }} />
-                  </div>
-                );
-                return (
-                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" style={{
-                    display: 'flex', alignItems: 'center', gap: '0.5rem',
-                    padding: '0.75rem 1rem', borderRadius: '10px',
-                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-                    color: 'rgba(255,255,255,0.5)', textDecoration: 'none', fontSize: '0.85rem',
-                  }}>
-                    <ExternalLink className="w-4 h-4" /> {url}
-                  </a>
-                );
-              })}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {game.linkedVideos.map((url, i) => (
+                <LinkedVideoCard key={i} url={url} index={i} />
+              ))}
             </div>
           </div>
         )}

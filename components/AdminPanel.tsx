@@ -713,8 +713,9 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                           onChange={(e) => setPendingAssign((p) => ({ ...p, [v.id]: e.target.value || null }))}
                           style={{
                             padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem',
-                            background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)',
-                            color: 'rgba(255,255,255,0.6)', cursor: 'pointer', maxWidth: '160px',
+                            background: '#1a0533', border: '1px solid rgba(160,32,240,0.3)',
+                            color: 'rgba(255,255,255,0.7)', cursor: 'pointer', maxWidth: '180px',
+                            colorScheme: 'dark',
                           }}
                         >
                           <option value="">— Délier —</option>
