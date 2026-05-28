@@ -26,7 +26,7 @@ const STATUSES: { value: GameStatus; label: string; color: string }[] = [
 
 interface Props { initialGames: Game[]; initialTopIds: string[]; initialConfig: SiteConfig }
 
-type PanelMode = 'add' | 'edit' | null;
+type PanelMode = 'add' | 'edit' | 'manual' | null;
 type AdminTab = 'games' | 'about';
 
 export default function AdminPanel({ initialGames, initialTopIds, initialConfig }: Props) {
@@ -75,12 +75,20 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   const [isPending, startTransition] = useTransition();
   const [syncing, setSyncing] = useState<string | null>(null); // game id being synced
 
+  // Manual add fields
+  const [manualTitle, setManualTitle] = useState('');
+  const [manualCover, setManualCover] = useState('');
+
   // Panel cover + title display
-  const panelCover  = panelMode === 'add' ? selectedRawg?.background_image  : editingGame?.cover;
-  const panelTitle  = panelMode === 'add' ? selectedRawg?.name              : editingGame?.title;
+  const panelCover  = panelMode === 'add' ? selectedRawg?.background_image
+                    : panelMode === 'manual' ? (manualCover.trim() || undefined)
+                    : editingGame?.cover;
+  const panelTitle  = panelMode === 'add' ? selectedRawg?.name
+                    : panelMode === 'manual' ? (manualTitle || 'Nouveau jeu')
+                    : editingGame?.title;
   const panelYear   = panelMode === 'add'
     ? (selectedRawg?.released ? new Date(selectedRawg.released).getFullYear() : null)
-    : editingGame?.year;
+    : editingGame?.year ?? null;
   const panelGenre  = panelMode === 'add' ? selectedRawg?.genres?.[0]?.name : editingGame?.genre;
 
   // Debounced RAWG search
@@ -101,10 +109,15 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
     setPlatform('PC'); setStatus('terminé'); setTier(undefined);
     setRating(''); setHours(''); setComment(''); setStoreUrl('');
     setLinkedVideos([]); setVideoInput('');
+    setManualTitle(''); setManualCover('');
   }
 
   function closePanel() {
     setPanelMode(null); setSelectedRawg(null); setEditingGame(null); resetForm();
+  }
+
+  function openManualPanel() {
+    setSelectedRawg(null); setEditingGame(null); resetForm(); setPanelMode('manual');
   }
 
   async function openAddPanel(g: RawgGame) {
@@ -137,21 +150,9 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   function handleSubmit() {
     if (panelMode === 'add' && !selectedRawg) return;
     if (panelMode === 'edit' && !editingGame) return;
+    if (panelMode === 'manual' && !manualTitle.trim()) return;
 
-    const game: Game = panelMode === 'add' ? {
-      id: `rawg-${selectedRawg!.id}`,
-      title: selectedRawg!.name,
-      cover: selectedRawg!.background_image ?? undefined,
-      platform, status, tier,
-      rating: rating ? parseFloat(rating) : undefined,
-      hours: hours ? parseInt(hours) : undefined,
-      comment: comment.trim() || undefined,
-      year: selectedRawg!.released ? new Date(selectedRawg!.released).getFullYear() : undefined,
-      genre: selectedRawg!.genres?.[0]?.name,
-      storeUrl: storeUrl.trim() || undefined,
-      linkedVideos: linkedVideos.length > 0 ? linkedVideos : undefined,
-    } : {
-      ...editingGame!,
+    const sharedFields = {
       platform, status, tier,
       rating: rating ? parseFloat(rating) : undefined,
       hours: hours ? parseInt(hours) : undefined,
@@ -160,11 +161,31 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
       linkedVideos: linkedVideos.length > 0 ? linkedVideos : undefined,
     };
 
+    const game: Game =
+      panelMode === 'add' ? {
+        id: `rawg-${selectedRawg!.id}`,
+        title: selectedRawg!.name,
+        cover: selectedRawg!.background_image ?? undefined,
+        year: selectedRawg!.released ? new Date(selectedRawg!.released).getFullYear() : undefined,
+        genre: selectedRawg!.genres?.[0]?.name,
+        ...sharedFields,
+      }
+      : panelMode === 'manual' ? {
+        id: `manual-${Date.now()}`,
+        title: manualTitle.trim(),
+        cover: manualCover.trim() || undefined,
+        ...sharedFields,
+      }
+      : {
+        ...editingGame!,
+        ...sharedFields,
+      };
+
     startTransition(async () => {
       await addGameAction(game);
       setGames((prev) => [game, ...prev.filter((g) => g.id !== game.id)]);
       closePanel();
-      if (panelMode === 'add') { setQuery(''); setResults([]); }
+      if (panelMode === 'add' || panelMode === 'manual') { setQuery(''); setResults([]); }
     });
   }
 
@@ -405,6 +426,28 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
             )}
           </div>
 
+          {/* Manual add button */}
+          <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button
+              onClick={openManualPanel}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.4rem',
+                padding: '0.4rem 0.9rem', borderRadius: '8px', fontSize: '0.78rem', fontWeight: 600,
+                background: panelMode === 'manual' ? 'rgba(160,32,240,0.2)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${panelMode === 'manual' ? 'rgba(160,32,240,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                color: panelMode === 'manual' ? '#c084fc' : 'rgba(255,255,255,0.35)',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+            >
+              <Plus className="w-3.5 h-3.5" /> Ajouter manuellement
+            </button>
+            {query.trim() && !searching && results.length === 0 && (
+              <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' }}>
+                Aucun résultat RAWG — essaie l&apos;ajout manuel
+              </p>
+            )}
+          </div>
+
           {searching && <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.85rem', marginBottom: '1rem' }}>Recherche en cours…</p>}
 
           {/* RAWG results */}
@@ -556,32 +599,83 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
             background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(160,32,240,0.25)',
             borderRadius: '16px', overflow: 'hidden',
           }}>
-            {/* Cover */}
-            {panelCover
-              ? <img src={panelCover} alt={panelTitle ?? ''} style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }} />
-              : <div style={{ width: '100%', aspectRatio: '16/9', background: 'rgba(160,32,240,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Gamepad2 style={{ color: 'rgba(160,32,240,0.3)', width: '3rem', height: '3rem' }} />
-                </div>
-            }
+            {/* Cover preview */}
+            {panelMode === 'manual' ? (
+              /* Manual mode: cover URL input with live preview */
+              <div style={{ position: 'relative' }}>
+                {manualCover.trim() ? (
+                  <img src={manualCover.trim()} alt="cover" style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                ) : (
+                  <div style={{ width: '100%', aspectRatio: '16/9', background: 'rgba(160,32,240,0.08)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                    <Gamepad2 style={{ color: 'rgba(160,32,240,0.25)', width: '2.5rem', height: '2.5rem' }} />
+                    <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.2)' }}>Colle une URL d&apos;image ci-dessous</span>
+                  </div>
+                )}
+              </div>
+            ) : panelCover ? (
+              <img src={panelCover} alt={panelTitle ?? ''} style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }} />
+            ) : (
+              <div style={{ width: '100%', aspectRatio: '16/9', background: 'rgba(160,32,240,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Gamepad2 style={{ color: 'rgba(160,32,240,0.3)', width: '3rem', height: '3rem' }} />
+              </div>
+            )}
 
             <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* Title + close */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <p style={{ fontWeight: 800, fontSize: '1rem', color: 'white', lineHeight: 1.3 }}>{panelTitle}</p>
-                  {(panelYear || panelGenre) && (
+              {/* Title row + close */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {panelMode === 'manual' ? (
+                    /* Editable title in manual mode */
+                    <input
+                      type="text"
+                      value={manualTitle}
+                      onChange={(e) => setManualTitle(e.target.value)}
+                      placeholder="Titre du jeu *"
+                      autoFocus
+                      style={{
+                        width: '100%', padding: '0.4rem 0.6rem', borderRadius: '7px',
+                        border: '1px solid rgba(160,32,240,0.35)', background: 'rgba(255,255,255,0.06)',
+                        color: 'white', fontWeight: 800, fontSize: '1rem', outline: 'none',
+                      }}
+                    />
+                  ) : (
+                    <p style={{ fontWeight: 800, fontSize: '1rem', color: 'white', lineHeight: 1.3 }}>{panelTitle}</p>
+                  )}
+                  {(panelYear || panelGenre) && panelMode !== 'manual' && (
                     <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)', marginTop: '0.15rem' }}>
                       {[panelYear, panelGenre].filter(Boolean).join(' · ')}
                     </p>
                   )}
                   <p style={{ fontSize: '0.7rem', color: 'rgba(160,32,240,0.6)', marginTop: '0.2rem', fontWeight: 600 }}>
-                    {panelMode === 'edit' ? 'Mode édition' : 'Nouveau jeu'}
+                    {panelMode === 'edit' ? 'Mode édition' : panelMode === 'manual' ? 'Ajout manuel' : 'Nouveau jeu'}
                   </p>
                 </div>
-                <button onClick={closePanel} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer' }}>
+                <button onClick={closePanel} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', flexShrink: 0 }}>
                   <X className="w-4 h-4" />
                 </button>
               </div>
+
+              {/* Cover URL input (manual only) */}
+              {panelMode === 'manual' && (
+                <div>
+                  <label className="section-label" style={{ display: 'block', marginBottom: '0.4rem' }}>URL de la cover (optionnel)</label>
+                  <input
+                    type="url"
+                    value={manualCover}
+                    onChange={(e) => setManualCover(e.target.value)}
+                    placeholder="https://… (image JPG/PNG)"
+                    style={{
+                      width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px',
+                      border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)',
+                      color: 'white', fontSize: '0.82rem', outline: 'none',
+                    }}
+                  />
+                  <p style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.2)', marginTop: '0.3rem' }}>
+                    Tu pourras aussi synchro la cover depuis RAWG plus tard via le bouton ⟳
+                  </p>
+                </div>
+              )}
 
               {/* Status */}
               <div>
@@ -726,15 +820,23 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
               </div>
 
               {/* Submit */}
-              <button onClick={handleSubmit} disabled={isPending} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                padding: '0.8rem', borderRadius: '10px', border: 'none',
-                background: 'linear-gradient(135deg,#7c3aed,#a855f7)',
-                color: 'white', fontWeight: 700, fontSize: '0.95rem',
-                cursor: isPending ? 'not-allowed' : 'pointer', opacity: isPending ? 0.7 : 1,
-              }}>
+              <button
+                onClick={handleSubmit}
+                disabled={isPending || (panelMode === 'manual' && !manualTitle.trim())}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                  padding: '0.8rem', borderRadius: '10px', border: 'none',
+                  background: 'linear-gradient(135deg,#7c3aed,#a855f7)',
+                  color: 'white', fontWeight: 700, fontSize: '0.95rem',
+                  cursor: (isPending || (panelMode === 'manual' && !manualTitle.trim())) ? 'not-allowed' : 'pointer',
+                  opacity: (isPending || (panelMode === 'manual' && !manualTitle.trim())) ? 0.5 : 1,
+                  transition: 'opacity 0.15s',
+                }}
+              >
                 {panelMode === 'edit' ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                {isPending ? 'Sauvegarde…' : panelMode === 'edit' ? 'Enregistrer les modifications' : 'Ajouter à ma biblio'}
+                {isPending ? 'Sauvegarde…'
+                  : panelMode === 'edit' ? 'Enregistrer les modifications'
+                  : 'Ajouter à ma biblio'}
               </button>
             </div>
           </div>
