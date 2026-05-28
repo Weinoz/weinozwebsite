@@ -5,6 +5,9 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { getGames, saveGames, saveTopGameIds, saveSiteConfig, SiteConfig } from '@/lib/redis';
 import { Game } from '@/data/games';
+import { fetchYouTubeVideos } from '@/lib/youtube';
+import { fetchTwitchVideos } from '@/lib/twitch';
+import { buildVideoLinks } from '@/lib/autolink';
 
 export async function loginAction(_: unknown, formData: FormData) {
   const password = formData.get('password') as string;
@@ -51,4 +54,42 @@ export async function setTopGamesAction(ids: string[]) {
 export async function saveSiteConfigAction(config: SiteConfig) {
   await saveSiteConfig(config);
   revalidatePath('/a-propos');
+}
+
+export async function syncVideoLinksAction(): Promise<{ added: number; gamesUpdated: number }> {
+  const [games, ytVideos, twitchVideos] = await Promise.all([
+    getGames(),
+    process.env.YOUTUBE_CHANNEL_ID
+      ? fetchYouTubeVideos(process.env.YOUTUBE_CHANNEL_ID)
+      : Promise.resolve([]),
+    process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET && process.env.TWITCH_LOGIN
+      ? fetchTwitchVideos(
+          process.env.TWITCH_CLIENT_ID,
+          process.env.TWITCH_CLIENT_SECRET,
+          process.env.TWITCH_LOGIN,
+        )
+      : Promise.resolve([]),
+  ]);
+
+  const allVideos = [...ytVideos, ...twitchVideos];
+  const links = buildVideoLinks(allVideos, games);
+
+  let totalAdded = 0;
+  let gamesUpdated = 0;
+
+  const updatedGames = games.map((g) => {
+    const newUrls = links.get(g.id);
+    if (!newUrls?.length) return g;
+    gamesUpdated++;
+    totalAdded += newUrls.length;
+    return { ...g, linkedVideos: [...(g.linkedVideos ?? []), ...newUrls] };
+  });
+
+  if (totalAdded > 0) {
+    await saveGames(updatedGames);
+    revalidatePath('/jeux');
+    revalidatePath('/');
+  }
+
+  return { added: totalAdded, gamesUpdated };
 }

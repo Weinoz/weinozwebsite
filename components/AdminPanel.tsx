@@ -5,7 +5,7 @@ import { Game, GameStatus, GamePlatform, GameTier } from '@/data/games';
 import { RawgGame } from '@/lib/rawg';
 import { SiteConfig } from '@/lib/redis';
 import { SteamSearchHit, SteamGameInfo } from '@/lib/steam';
-import { addGameAction, removeGameAction, logoutAction, setTopGamesAction, saveSiteConfigAction } from '@/app/admin/actions';
+import { addGameAction, removeGameAction, logoutAction, setTopGamesAction, saveSiteConfigAction, syncVideoLinksAction } from '@/app/admin/actions';
 import { Star, Clock, Trash2, Plus, Search, X, LogOut, Gamepad2, Pencil, ExternalLink, Link, Video, RefreshCw, Trophy, User, Monitor, Mic } from 'lucide-react';
 
 const PLATFORMS: GamePlatform[] = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Switch', 'Mobile'];
@@ -75,6 +75,8 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
 
   const [isPending, startTransition] = useTransition();
   const [syncing, setSyncing] = useState<string | null>(null); // game id being synced
+  const [linkingVideos, setLinkingVideos] = useState(false);
+  const [linkResult, setLinkResult] = useState<string | null>(null);
 
   // Cover picker
   const [coverPickerGame, setCoverPickerGame] = useState<Game | null>(null);
@@ -336,6 +338,24 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
     }
   }
 
+  async function runVideoSync() {
+    setLinkingVideos(true);
+    setLinkResult(null);
+    try {
+      const { added, gamesUpdated } = await syncVideoLinksAction();
+      if (added === 0) {
+        setLinkResult('Aucun nouveau lien trouvé.');
+      } else {
+        setLinkResult(`✓ ${added} lien${added > 1 ? 's' : ''} ajouté${added > 1 ? 's' : ''} sur ${gamesUpdated} jeu${gamesUpdated > 1 ? 'x' : ''} !`);
+      }
+    } catch {
+      setLinkResult('Erreur lors de la liaison des vidéos.');
+    } finally {
+      setLinkingVideos(false);
+      setTimeout(() => setLinkResult(null), 5000);
+    }
+  }
+
   function handleRemove(id: string) {
     startTransition(async () => {
       await removeGameAction(id);
@@ -590,29 +610,55 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
 
           {/* Library */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', gap: '0.5rem', flexWrap: 'wrap' }}>
               <div>
                 <p className="section-label">Ma bibliothèque ({games.length})</p>
                 <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.25)', marginTop: '0.2rem' }}>
                   <Star style={{ width: '0.6rem', height: '0.6rem', display: 'inline', verticalAlign: 'middle', color: '#facc15' }} /> Étoile = Mon Top 5 ({topIds.length}/5)
                 </p>
               </div>
-              {games.some((g) => !g.cover && !g.rawgId && !g.id.startsWith('rawg-')) && (
-                <button
-                  onClick={syncAllCovers}
-                  disabled={!!syncing}
-                  title="Synchroniser les covers manquantes depuis RAWG"
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '0.35rem',
-                    padding: '0.3rem 0.7rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600,
-                    background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.3)',
-                    color: '#67e8f9', cursor: syncing ? 'not-allowed' : 'pointer', opacity: syncing ? 0.5 : 1,
-                  }}
-                >
-                  <RefreshCw className="w-3 h-3" style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
-                  Sync covers
-                </button>
-              )}
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* Video auto-link button */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
+                  <button
+                    onClick={runVideoSync}
+                    disabled={linkingVideos || !!syncing}
+                    title="Détecter les jeux dans les titres de vidéos YouTube / Twitch et les lier automatiquement"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '0.35rem',
+                      padding: '0.3rem 0.7rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600,
+                      background: 'rgba(160,32,240,0.1)', border: '1px solid rgba(160,32,240,0.3)',
+                      color: '#c084fc', cursor: (linkingVideos || !!syncing) ? 'not-allowed' : 'pointer',
+                      opacity: (linkingVideos || !!syncing) ? 0.5 : 1,
+                    }}
+                  >
+                    <Video className="w-3 h-3" style={{ animation: linkingVideos ? 'spin 1s linear infinite' : 'none' }} />
+                    {linkingVideos ? 'Analyse…' : '🔗 Lier les vidéos'}
+                  </button>
+                  {linkResult && (
+                    <p style={{ fontSize: '0.65rem', color: linkResult.startsWith('✓') ? '#86efac' : 'rgba(255,255,255,0.4)', fontWeight: 600 }}>
+                      {linkResult}
+                    </p>
+                  )}
+                </div>
+                {/* Sync covers button */}
+                {games.some((g) => !g.cover && !g.rawgId && !g.id.startsWith('rawg-')) && (
+                  <button
+                    onClick={syncAllCovers}
+                    disabled={!!syncing}
+                    title="Synchroniser les covers manquantes depuis RAWG"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '0.35rem',
+                      padding: '0.3rem 0.7rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600,
+                      background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.3)',
+                      color: '#67e8f9', cursor: syncing ? 'not-allowed' : 'pointer', opacity: syncing ? 0.5 : 1,
+                    }}
+                  >
+                    <RefreshCw className="w-3 h-3" style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
+                    Sync covers
+                  </button>
+                )}
+              </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {games.map((g) => (
