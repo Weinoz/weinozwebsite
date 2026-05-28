@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import GameCard from '@/components/GameCard';
+import GameModal from '@/components/GameModal';
 import { Game, GameStatus, GamePlatform } from '@/data/games';
 import { Star, Clock, Gamepad2, Trophy, Play, X, BookMarked, Infinity } from 'lucide-react';
 
@@ -39,6 +40,7 @@ export default function JeuxClient({ initialGames }: Props) {
   const [activeStatus, setActiveStatus] = useState<'all' | GameStatus>('all');
   const [activePlatform, setActivePlatform] = useState<'all' | GamePlatform>('all');
   const [sortBy, setSortBy] = useState('rating-desc');
+  const [selectedGame, setSelectedGame] = useState<Game | null>(null);
 
   const filtered = useMemo(() => {
     let list = [...initialGames];
@@ -173,9 +175,13 @@ export default function JeuxClient({ initialGames }: Props) {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filtered.map((g) => (
-            <GameCard key={g.id} game={g} />
+            <GameCard key={g.id} game={g} onClick={() => setSelectedGame(g)} />
           ))}
         </div>
+      )}
+
+      {selectedGame && (
+        <GameModal game={selectedGame} onClose={() => setSelectedGame(null)} />
       )}
     </div>
   );

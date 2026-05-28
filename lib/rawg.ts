@@ -13,6 +13,27 @@ export interface RawgGameDetail extends RawgGame {
   stores: Array<{ url: string; store: { name: string; slug: string } }> | null;
 }
 
+export interface RawgScreenshot {
+  id: number;
+  image: string;
+}
+
+export async function getGameScreenshots(rawgId: number): Promise<RawgScreenshot[]> {
+  const key = process.env.RAWG_API_KEY;
+  if (!key) return [];
+  try {
+    const res = await fetch(
+      `https://api.rawg.io/api/games/${rawgId}/screenshots?key=${key}&page_size=8`,
+      { next: { revalidate: 86400 } }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.results ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function getGameDetails(id: number): Promise<RawgGameDetail | null> {
   const key = process.env.RAWG_API_KEY;
   if (!key) return null;

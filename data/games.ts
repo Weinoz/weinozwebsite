@@ -13,6 +13,7 @@ export interface Game {
   year?: number;
   genre?: string;
   storeUrl?: string;
+  linkedVideos?: string[]; // YouTube / Twitch URLs
 }
 
 // ─── REMPLACE / COMPLÈTE AVEC TES VRAIS JEUX ────────────────────────────────

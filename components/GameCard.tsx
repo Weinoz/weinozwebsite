@@ -28,9 +28,10 @@ function titleToHue(title: string): number {
 
 interface Props {
   game: Game;
+  onClick?: () => void;
 }
 
-export default function GameCard({ game }: Props) {
+export default function GameCard({ game, onClick }: Props) {
   const status = statusConfig[game.status];
   const hue = titleToHue(game.title);
   const platformColor = platformColors[game.platform] ?? '#a78bfa';
@@ -38,7 +39,11 @@ export default function GameCard({ game }: Props) {
   return (
     <div
       className="group game-card-hover flex flex-col overflow-hidden"
-      style={{ background: 'rgba(255,255,255,0.025)', cursor: 'default' }}
+      style={{ background: 'rgba(255,255,255,0.025)', cursor: onClick ? 'pointer' : 'default' }}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); } : undefined}
     >
       {/* Cover */}
       <div

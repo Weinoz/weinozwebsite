@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useTransition } from 'react';
 import { Game, GameStatus, GamePlatform } from '@/data/games';
 import { RawgGame } from '@/lib/rawg';
 import { addGameAction, removeGameAction, logoutAction } from '@/app/admin/actions';
-import { Star, Clock, Trash2, Plus, Search, X, LogOut, Gamepad2, Pencil, ExternalLink } from 'lucide-react';
+import { Star, Clock, Trash2, Plus, Search, X, LogOut, Gamepad2, Pencil, ExternalLink, Link, Video } from 'lucide-react';
 
 const PLATFORMS: GamePlatform[] = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Switch', 'Mobile'];
 const STATUSES: { value: GameStatus; label: string; color: string }[] = [
@@ -41,6 +41,8 @@ export default function AdminPanel({ initialGames }: Props) {
   const [hours, setHours] = useState('');
   const [comment, setComment] = useState('');
   const [storeUrl, setStoreUrl] = useState('');
+  const [linkedVideos, setLinkedVideos] = useState<string[]>([]);
+  const [videoInput, setVideoInput] = useState('');
 
   const [isPending, startTransition] = useTransition();
 
@@ -69,6 +71,7 @@ export default function AdminPanel({ initialGames }: Props) {
   function resetForm() {
     setPlatform('PC'); setStatus('terminé');
     setRating(''); setHours(''); setComment(''); setStoreUrl('');
+    setLinkedVideos([]); setVideoInput('');
   }
 
   function closePanel() {
@@ -97,6 +100,8 @@ export default function AdminPanel({ initialGames }: Props) {
     setHours(g.hours?.toString() ?? '');
     setComment(g.comment ?? '');
     setStoreUrl(g.storeUrl ?? '');
+    setLinkedVideos(g.linkedVideos ?? []);
+    setVideoInput('');
     setPanelMode('edit');
   }
 
@@ -115,6 +120,7 @@ export default function AdminPanel({ initialGames }: Props) {
       year: selectedRawg!.released ? new Date(selectedRawg!.released).getFullYear() : undefined,
       genre: selectedRawg!.genres?.[0]?.name,
       storeUrl: storeUrl.trim() || undefined,
+      linkedVideos: linkedVideos.length > 0 ? linkedVideos : undefined,
     } : {
       ...editingGame!,
       platform, status,
@@ -122,6 +128,7 @@ export default function AdminPanel({ initialGames }: Props) {
       hours: hours ? parseInt(hours) : undefined,
       comment: comment.trim() || undefined,
       storeUrl: storeUrl.trim() || undefined,
+      linkedVideos: linkedVideos.length > 0 ? linkedVideos : undefined,
     };
 
     startTransition(async () => {
@@ -389,6 +396,46 @@ export default function AdminPanel({ initialGames }: Props) {
                   placeholder="https://store.steampowered.com/app/…"
                   style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)', color: 'white', fontSize: '0.82rem', outline: 'none' }}
                 />
+              </div>
+
+              {/* Linked videos */}
+              <div>
+                <label className="section-label" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.5rem' }}>
+                  <Video className="w-3 h-3" /> Vidéos liées (YouTube / Twitch)
+                </label>
+                <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                  <input
+                    type="url" value={videoInput} onChange={(e) => setVideoInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && videoInput.trim()) {
+                        e.preventDefault();
+                        setLinkedVideos(v => [...v, videoInput.trim()]);
+                        setVideoInput('');
+                      }
+                    }}
+                    placeholder="https://youtu.be/… ou twitch.tv/…"
+                    style={{ flex: 1, padding: '0.45rem 0.65rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)', color: 'white', fontSize: '0.78rem', outline: 'none' }}
+                  />
+                  <button
+                    onClick={() => { if (videoInput.trim()) { setLinkedVideos(v => [...v, videoInput.trim()]); setVideoInput(''); } }}
+                    style={{ padding: '0.45rem 0.7rem', borderRadius: '8px', background: 'rgba(160,32,240,0.2)', border: '1px solid rgba(160,32,240,0.4)', color: '#c084fc', cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                {linkedVideos.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    {linkedVideos.map((url, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.3rem 0.5rem', borderRadius: '6px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <Link className="w-3 h-3" style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
+                        <span style={{ flex: 1, fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</span>
+                        <button onClick={() => setLinkedVideos(v => v.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: 'rgba(239,68,68,0.5)', cursor: 'pointer', padding: '0.1rem', flexShrink: 0 }}>
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Submit */}
