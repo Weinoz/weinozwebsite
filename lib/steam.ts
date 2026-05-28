@@ -1,3 +1,10 @@
+export interface SteamSearchHit {
+  id: number;
+  name: string;
+  cover: string;   // header.jpg CDN URL
+  storeUrl: string;
+}
+
 export interface SteamPrice {
   final: number;             // cents
   initial: number;           // cents (before discount)
@@ -5,6 +12,27 @@ export interface SteamPrice {
   finalFormatted: string;    // e.g. "29,99€"
   initialFormatted: string;
   isFree: boolean;
+}
+
+/** Search the Steam store and return simplified hits. */
+export async function searchSteam(query: string): Promise<SteamSearchHit[]> {
+  try {
+    const res = await fetch(
+      `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(query)}&l=english&cc=fr`,
+      { next: { revalidate: 300 } },
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data.items ?? []).slice(0, 12).map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      cover: `https://cdn.akamai.steamstatic.com/steam/apps/${item.id}/header.jpg`,
+      storeUrl: `https://store.steampowered.com/app/${item.id}/`,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /** Extract the numeric Steam App ID from a store URL, or null if not Steam. */

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useTransition } from 'react';
 import { Game, GameStatus, GamePlatform, GameTier } from '@/data/games';
 import { RawgGame } from '@/lib/rawg';
 import { SiteConfig } from '@/lib/redis';
+import { SteamSearchHit } from '@/lib/steam';
 import { addGameAction, removeGameAction, logoutAction, setTopGamesAction, saveSiteConfigAction } from '@/app/admin/actions';
 import { Star, Clock, Trash2, Plus, Search, X, LogOut, Gamepad2, Pencil, ExternalLink, Link, Video, RefreshCw, Trophy, User, Monitor, Mic } from 'lucide-react';
 
@@ -77,7 +78,9 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
 
   // Cover picker
   const [coverPickerGame, setCoverPickerGame] = useState<Game | null>(null);
+  const [coverPickerSource, setCoverPickerSource] = useState<'rawg' | 'steam'>('rawg');
   const [coverPickerResults, setCoverPickerResults] = useState<RawgGame[]>([]);
+  const [coverPickerSteamResults, setCoverPickerSteamResults] = useState<SteamSearchHit[]>([]);
   const [coverPickerLoading, setCoverPickerLoading] = useState(false);
   const [coverPickerQuery, setCoverPickerQuery] = useState('');
 
@@ -204,8 +207,10 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   /** Opens the cover picker for a specific game, pre-searches RAWG with its title. */
   async function openCoverPicker(game: Game) {
     setCoverPickerGame(game);
+    setCoverPickerSource('rawg');
     setCoverPickerQuery(game.title);
     setCoverPickerResults([]);
+    setCoverPickerSteamResults([]);
     setCoverPickerLoading(true);
     try {
       const res = await fetch(`/api/rawg?q=${encodeURIComponent(game.title)}`);
@@ -214,16 +219,29 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
     finally { setCoverPickerLoading(false); }
   }
 
-  /** Search within the picker (user changed the query). */
-  async function searchInPicker(q: string) {
+  /** Search within the picker using the current source. */
+  async function searchInPicker(q: string, source?: 'rawg' | 'steam') {
     if (!q.trim()) return;
+    const src = source ?? coverPickerSource;
     setCoverPickerLoading(true);
     setCoverPickerResults([]);
+    setCoverPickerSteamResults([]);
     try {
-      const res = await fetch(`/api/rawg?q=${encodeURIComponent(q)}`);
-      setCoverPickerResults(await res.json());
+      if (src === 'steam') {
+        const res = await fetch(`/api/steam/search?q=${encodeURIComponent(q)}`);
+        setCoverPickerSteamResults(await res.json());
+      } else {
+        const res = await fetch(`/api/rawg?q=${encodeURIComponent(q)}`);
+        setCoverPickerResults(await res.json());
+      }
     } catch { /* ignore */ }
     finally { setCoverPickerLoading(false); }
+  }
+
+  /** Switch source tab and re-search. */
+  function switchPickerSource(src: 'rawg' | 'steam') {
+    setCoverPickerSource(src);
+    searchInPicker(coverPickerQuery, src);
   }
 
   /** Apply a RAWG result as cover for the game in the picker. */
@@ -243,6 +261,28 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
       if (editingGame?.id === coverPickerGame.id) setEditingGame(updated);
       setCoverPickerGame(null);
       setCoverPickerResults([]);
+      setCoverPickerSteamResults([]);
+    } catch { /* ignore */ }
+    finally { setSyncing(null); }
+  }
+
+  /** Apply a Steam search result as cover. */
+  async function applyCoverFromSteam(hit: SteamSearchHit) {
+    if (!coverPickerGame) return;
+    const updated: Game = {
+      ...coverPickerGame,
+      cover: hit.cover,
+      rawgId: undefined,
+      storeUrl: coverPickerGame.storeUrl || hit.storeUrl,
+    };
+    setSyncing(coverPickerGame.id);
+    try {
+      await addGameAction(updated);
+      setGames((prev) => prev.map((g) => g.id === coverPickerGame.id ? updated : g));
+      if (editingGame?.id === coverPickerGame.id) setEditingGame(updated);
+      setCoverPickerGame(null);
+      setCoverPickerResults([]);
+      setCoverPickerSteamResults([]);
     } catch { /* ignore */ }
     finally { setSyncing(null); }
   }
@@ -982,32 +1022,54 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
               </button>
             </div>
 
-            {/* Search bar */}
-            <div style={{ padding: '0.75rem 1.25rem', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-              <input
-                type="text"
-                value={coverPickerQuery}
-                onChange={(e) => setCoverPickerQuery(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') searchInPicker(coverPickerQuery); }}
-                placeholder="Nom du jeu…"
-                style={{
-                  flex: 1, padding: '0.5rem 0.75rem', borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)',
-                  color: 'white', fontSize: '0.88rem', outline: 'none',
-                }}
-              />
-              <button
-                onClick={() => searchInPicker(coverPickerQuery)}
-                disabled={coverPickerLoading || !coverPickerQuery.trim()}
-                style={{
-                  padding: '0.5rem 1rem', borderRadius: '8px',
-                  background: 'rgba(160,32,240,0.2)', border: '1px solid rgba(160,32,240,0.4)',
-                  color: '#c084fc', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
-                  opacity: coverPickerLoading ? 0.6 : 1,
-                }}
-              >
-                {coverPickerLoading ? '…' : 'Chercher'}
-              </button>
+            {/* Source tabs + search bar */}
+            <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+              {/* Tabs */}
+              <div style={{ display: 'flex', gap: '0', padding: '0.6rem 1.25rem 0' }}>
+                {(['rawg', 'steam'] as const).map((src) => (
+                  <button
+                    key={src}
+                    onClick={() => switchPickerSource(src)}
+                    style={{
+                      padding: '0.35rem 1rem', fontSize: '0.78rem', fontWeight: 700,
+                      border: 'none', cursor: 'pointer', borderRadius: '8px 8px 0 0',
+                      background: coverPickerSource === src ? 'rgba(160,32,240,0.2)' : 'transparent',
+                      color: coverPickerSource === src ? '#c084fc' : 'rgba(255,255,255,0.3)',
+                      borderBottom: coverPickerSource === src ? '2px solid #a855f7' : '2px solid transparent',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {src === 'rawg' ? 'RAWG' : '🎮 Steam'}
+                  </button>
+                ))}
+              </div>
+              {/* Search */}
+              <div style={{ padding: '0.6rem 1.25rem 0.75rem', display: 'flex', gap: '0.5rem' }}>
+                <input
+                  type="text"
+                  value={coverPickerQuery}
+                  onChange={(e) => setCoverPickerQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') searchInPicker(coverPickerQuery); }}
+                  placeholder="Nom du jeu…"
+                  style={{
+                    flex: 1, padding: '0.5rem 0.75rem', borderRadius: '8px',
+                    border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)',
+                    color: 'white', fontSize: '0.88rem', outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={() => searchInPicker(coverPickerQuery)}
+                  disabled={coverPickerLoading || !coverPickerQuery.trim()}
+                  style={{
+                    padding: '0.5rem 1rem', borderRadius: '8px',
+                    background: 'rgba(160,32,240,0.2)', border: '1px solid rgba(160,32,240,0.4)',
+                    color: '#c084fc', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
+                    opacity: coverPickerLoading ? 0.6 : 1,
+                  }}
+                >
+                  {coverPickerLoading ? '…' : 'Chercher'}
+                </button>
+              </div>
             </div>
 
             {/* Results grid */}
@@ -1017,13 +1079,20 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                   Recherche en cours…
                 </p>
               )}
-              {!coverPickerLoading && coverPickerResults.length === 0 && (
+              {!coverPickerLoading && coverPickerSource === 'rawg' && coverPickerResults.length === 0 && (
                 <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: '0.85rem', textAlign: 'center', padding: '3rem 0' }}>
-                  Aucun résultat — modifie la recherche ci-dessus.
+                  Aucun résultat RAWG — essaie l&apos;onglet Steam.
                 </p>
               )}
+              {!coverPickerLoading && coverPickerSource === 'steam' && coverPickerSteamResults.length === 0 && (
+                <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: '0.85rem', textAlign: 'center', padding: '3rem 0' }}>
+                  Aucun résultat Steam — modifie la recherche ci-dessus.
+                </p>
+              )}
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '0.6rem' }}>
-                {coverPickerResults.map((r) => (
+                {/* RAWG results */}
+                {coverPickerSource === 'rawg' && coverPickerResults.map((r) => (
                   <button
                     key={r.id}
                     onClick={() => applyCoverFromPicker(r)}
@@ -1049,6 +1118,32 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                           {new Date(r.released).getFullYear()}
                         </p>
                       )}
+                    </div>
+                  </button>
+                ))}
+
+                {/* Steam results */}
+                {coverPickerSource === 'steam' && coverPickerSteamResults.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => applyCoverFromSteam(r)}
+                    title={`Appliquer : ${r.name}`}
+                    style={{
+                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '9px', overflow: 'hidden', cursor: 'pointer', textAlign: 'left', padding: 0,
+                      transition: 'border-color 0.15s, transform 0.15s',
+                    }}
+                    className="hover:border-blue-400 hover:scale-[1.02]"
+                  >
+                    <img
+                      src={r.cover}
+                      alt={r.name}
+                      style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                    <div style={{ padding: '0.4rem 0.55rem 0.5rem' }}>
+                      <p style={{ fontSize: '0.7rem', fontWeight: 600, color: 'rgba(255,255,255,0.75)', lineHeight: 1.35 }}>{r.name}</p>
+                      <p style={{ fontSize: '0.6rem', color: 'rgba(100,180,255,0.5)', marginTop: '0.15rem', fontWeight: 600 }}>Steam</p>
                     </div>
                   </button>
                 ))}
