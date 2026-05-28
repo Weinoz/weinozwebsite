@@ -1,13 +1,21 @@
 'use client';
 
 import { useState, useEffect, useRef, useTransition } from 'react';
-import { Game, GameStatus, GamePlatform } from '@/data/games';
+import { Game, GameStatus, GamePlatform, GameTier } from '@/data/games';
 import { RawgGame } from '@/lib/rawg';
 import { SiteConfig } from '@/lib/redis';
 import { addGameAction, removeGameAction, logoutAction, setTopGamesAction, saveSiteConfigAction } from '@/app/admin/actions';
 import { Star, Clock, Trash2, Plus, Search, X, LogOut, Gamepad2, Pencil, ExternalLink, Link, Video, RefreshCw, Trophy, User, Monitor, Mic } from 'lucide-react';
 
 const PLATFORMS: GamePlatform[] = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Switch', 'Mobile'];
+const TIERS: { value: GameTier; label: string; color: string }[] = [
+  { value: 'S', label: 'S — Chef-d\'œuvre', color: '#FF4444' },
+  { value: 'A', label: 'A — Excellent',      color: '#FF8C00' },
+  { value: 'B', label: 'B — Bon',            color: '#FFD700' },
+  { value: 'C', label: 'C — Correct',        color: '#22c55e' },
+  { value: 'D', label: 'D — Bof',            color: '#818cf8' },
+];
+const TIER_CYCLE: (GameTier | undefined)[] = [undefined, 'S', 'A', 'B', 'C', 'D'];
 const STATUSES: { value: GameStatus; label: string; color: string }[] = [
   { value: 'terminé',           label: 'Terminé',   color: '#22c55e' },
   { value: 'en cours',          label: 'En cours',  color: '#6366f1' },
@@ -56,6 +64,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   // Form fields
   const [platform, setPlatform] = useState<GamePlatform>('PC');
   const [status, setStatus] = useState<GameStatus>('terminé');
+  const [tier, setTier] = useState<GameTier | undefined>(undefined);
   const [rating, setRating] = useState('');
   const [hours, setHours] = useState('');
   const [comment, setComment] = useState('');
@@ -89,7 +98,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   }, [query]);
 
   function resetForm() {
-    setPlatform('PC'); setStatus('terminé');
+    setPlatform('PC'); setStatus('terminé'); setTier(undefined);
     setRating(''); setHours(''); setComment(''); setStoreUrl('');
     setLinkedVideos([]); setVideoInput('');
   }
@@ -115,7 +124,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
 
   function openEditPanel(g: Game) {
     setEditingGame(g); setSelectedRawg(null);
-    setPlatform(g.platform); setStatus(g.status);
+    setPlatform(g.platform); setStatus(g.status); setTier(g.tier);
     setRating(g.rating?.toString() ?? '');
     setHours(g.hours?.toString() ?? '');
     setComment(g.comment ?? '');
@@ -133,7 +142,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
       id: `rawg-${selectedRawg!.id}`,
       title: selectedRawg!.name,
       cover: selectedRawg!.background_image ?? undefined,
-      platform, status,
+      platform, status, tier,
       rating: rating ? parseFloat(rating) : undefined,
       hours: hours ? parseInt(hours) : undefined,
       comment: comment.trim() || undefined,
@@ -143,7 +152,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
       linkedVideos: linkedVideos.length > 0 ? linkedVideos : undefined,
     } : {
       ...editingGame!,
-      platform, status,
+      platform, status, tier,
       rating: rating ? parseFloat(rating) : undefined,
       hours: hours ? parseInt(hours) : undefined,
       comment: comment.trim() || undefined,
@@ -200,6 +209,14 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
       await removeGameAction(id);
       setGames((prev) => prev.filter((g) => g.id !== id));
     });
+  }
+
+  async function cycleTier(game: Game) {
+    const currentIdx = TIER_CYCLE.indexOf(game.tier);
+    const nextTier = TIER_CYCLE[(currentIdx + 1) % TIER_CYCLE.length];
+    const updated: Game = { ...game, tier: nextTier };
+    await addGameAction(updated);
+    setGames((prev) => prev.map((g) => g.id === game.id ? updated : g));
   }
 
   function saveConfig() {
@@ -468,7 +485,28 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                     </p>
                   </div>
                   {/* Actions */}
-                  <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0, alignItems: 'center' }}>
+                    {/* Tier cycle button */}
+                    {(() => {
+                      const t = g.tier;
+                      const cfg = t ? TIERS.find((x) => x.value === t) : null;
+                      return (
+                        <button
+                          onClick={() => cycleTier(g)}
+                          title={t ? `Tier ${t} — clic pour changer` : 'Pas de tier — clic pour assigner'}
+                          style={{
+                            padding: '0.15rem 0.45rem', borderRadius: '5px', fontSize: '0.7rem', fontWeight: 800,
+                            border: `1px solid ${cfg ? cfg.color + '55' : 'rgba(255,255,255,0.1)'}`,
+                            background: cfg ? cfg.color + '18' : 'transparent',
+                            color: cfg ? cfg.color : 'rgba(255,255,255,0.2)',
+                            cursor: 'pointer', minWidth: '28px', textAlign: 'center',
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {t ?? '—'}
+                        </button>
+                      );
+                    })()}
                     {/* Top 5 star */}
                     <button
                       onClick={() => toggleTop(g.id)}
@@ -556,6 +594,31 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                       background: status === value ? `${color}25` : 'transparent',
                       borderColor: status === value ? `${color}60` : 'rgba(255,255,255,0.1)',
                       color: status === value ? color : 'rgba(255,255,255,0.4)',
+                      cursor: 'pointer',
+                    }}>{label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tier */}
+              <div>
+                <label className="section-label" style={{ display: 'block', marginBottom: '0.4rem' }}>Tier List (optionnel)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  <button onClick={() => setTier(undefined)} style={{
+                    padding: '0.3rem 0.8rem', borderRadius: '100px', fontSize: '0.78rem', fontWeight: 600,
+                    border: '1px solid',
+                    background: tier === undefined ? 'rgba(255,255,255,0.08)' : 'transparent',
+                    borderColor: tier === undefined ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
+                    color: tier === undefined ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.25)',
+                    cursor: 'pointer',
+                  }}>— Aucun</button>
+                  {TIERS.map(({ value, label, color }) => (
+                    <button key={value} onClick={() => setTier(value)} style={{
+                      padding: '0.3rem 0.8rem', borderRadius: '100px', fontSize: '0.78rem', fontWeight: 700,
+                      border: '1px solid',
+                      background: tier === value ? `${color}25` : 'transparent',
+                      borderColor: tier === value ? `${color}60` : 'rgba(255,255,255,0.1)',
+                      color: tier === value ? color : 'rgba(255,255,255,0.3)',
                       cursor: 'pointer',
                     }}>{label}</button>
                   ))}

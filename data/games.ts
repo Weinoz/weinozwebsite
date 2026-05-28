@@ -1,5 +1,6 @@
 export type GameStatus = 'terminé' | 'en cours' | 'abandonné' | 'liste de souhaits' | 'infini';
 export type GamePlatform = 'PC' | 'PS5' | 'PS4' | 'Xbox Series' | 'Switch' | 'Mobile';
+export type GameTier = 'S' | 'A' | 'B' | 'C' | 'D';
 
 export interface Game {
   id: string;
@@ -7,6 +8,7 @@ export interface Game {
   cover?: string;
   platform: GamePlatform;
   status: GameStatus;
+  tier?: GameTier;         // Tier list ranking
   rating?: number; // sur 10
   comment?: string;
   hours?: number;
