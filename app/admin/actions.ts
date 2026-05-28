@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { getGames, saveGames, saveTopGameIds } from '@/lib/redis';
+import { getGames, saveGames, saveTopGameIds, saveSiteConfig, SiteConfig } from '@/lib/redis';
 import { Game } from '@/data/games';
 
 export async function loginAction(_: unknown, formData: FormData) {
@@ -46,4 +46,9 @@ export async function removeGameAction(id: string) {
 export async function setTopGamesAction(ids: string[]) {
   await saveTopGameIds(ids);
   revalidatePath('/');
+}
+
+export async function saveSiteConfigAction(config: SiteConfig) {
+  await saveSiteConfig(config);
+  revalidatePath('/a-propos');
 }

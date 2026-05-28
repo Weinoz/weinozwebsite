@@ -1,9 +1,9 @@
-import { getGames, getTopGameIds } from '@/lib/redis';
+import { getGames, getTopGameIds, getSiteConfig } from '@/lib/redis';
 import AdminPanel from '@/components/AdminPanel';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminPage() {
-  const [games, topIds] = await Promise.all([getGames(), getTopGameIds()]);
-  return <AdminPanel initialGames={games} initialTopIds={topIds} />;
+  const [games, topIds, siteConfig] = await Promise.all([getGames(), getTopGameIds(), getSiteConfig()]);
+  return <AdminPanel initialGames={games} initialTopIds={topIds} initialConfig={siteConfig} />;
 }

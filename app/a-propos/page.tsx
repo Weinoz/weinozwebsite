@@ -5,6 +5,9 @@ import {
   YoutubeIcon, TwitchIcon, TikTokIcon,
   InstagramIcon, XIcon, DiscordIcon,
 } from '@/components/SocialIcons';
+import { getSiteConfig } from '@/lib/redis';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'À propos',
@@ -31,16 +34,22 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Spec({ label, value }: { label: string; value: string }) {
+function Spec({ label, value }: { label: string; value?: string }) {
+  const display = value?.trim() || '— à renseigner —';
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
       <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.35)' }}>{label}</span>
-      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255,255,255,0.8)' }}>{value}</span>
+      <span style={{
+        fontSize: '0.85rem', fontWeight: 600,
+        color: display === '— à renseigner —' ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.8)',
+      }}>{display}</span>
     </div>
   );
 }
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const config = await getSiteConfig();
+
   return (
     <div style={{ background: 'var(--purple-ink)', minHeight: '100vh' }}>
       {/* Hero */}
@@ -64,33 +73,41 @@ export default function AboutPage() {
       <div className="max-w-3xl mx-auto px-5 sm:px-8 py-16">
 
         <Section title="Qui suis-je ?">
-          <p>
-            Je suis Weinoz, créateur de contenu gaming. Je stream sur Twitch, je poste des vidéos sur YouTube,
-            et je partage des clips et moments forts sur TikTok et Instagram.
-          </p>
-          <p style={{ marginTop: '1rem' }}>
-            Ma vibe : pas de prise de tête, juste du jeu, de la bonne humeur, et une communauté cool.
-            Peu importe le jeu — soulslike, FPS, RPG, ou multijoueur avec les potes — du moment que c&apos;est fun.
-          </p>
+          {config.bio ? (
+            config.bio.split('\n').map((line, i) => (
+              <p key={i} style={{ marginTop: i > 0 ? '1rem' : 0 }}>{line}</p>
+            ))
+          ) : (
+            <>
+              <p>
+                Je suis Weinoz, créateur de contenu gaming. Je stream sur Twitch, je poste des vidéos sur YouTube,
+                et je partage des clips et moments forts sur TikTok et Instagram.
+              </p>
+              <p style={{ marginTop: '1rem' }}>
+                Ma vibe : pas de prise de tête, juste du jeu, de la bonne humeur, et une communauté cool.
+                Peu importe le jeu — soulslike, FPS, RPG, ou multijoueur avec les potes — du moment que c&apos;est fun.
+              </p>
+            </>
+          )}
         </Section>
 
         <Section title="Ma config PC">
           <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '0.25rem 1rem', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <Spec label="CPU"    value="— à renseigner —" />
-            <Spec label="GPU"    value="— à renseigner —" />
-            <Spec label="RAM"    value="— à renseigner —" />
-            <Spec label="Écran"  value="— à renseigner —" />
-            <Spec label="Clavier" value="— à renseigner —" />
-            <Spec label="Souris" value="— à renseigner —" />
-            <Spec label="Casque" value="— à renseigner —" />
+            <Spec label="CPU"     value={config.pc?.cpu} />
+            <Spec label="GPU"     value={config.pc?.gpu} />
+            <Spec label="RAM"     value={config.pc?.ram} />
+            <Spec label="Écran"   value={config.pc?.screen} />
+            <Spec label="Clavier" value={config.pc?.keyboard} />
+            <Spec label="Souris"  value={config.pc?.mouse} />
+            <Spec label="Casque"  value={config.pc?.headset} />
           </div>
         </Section>
 
         <Section title="Setup stream">
           <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '16px', padding: '0.25rem 1rem', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <Spec label="Micro"   value="— à renseigner —" />
-            <Spec label="Webcam"  value="— à renseigner —" />
-            <Spec label="Logiciel" value="OBS Studio" />
+            <Spec label="Micro"    value={config.stream?.micro} />
+            <Spec label="Webcam"   value={config.stream?.webcam} />
+            <Spec label="Logiciel" value={config.stream?.software || 'OBS Studio'} />
           </div>
         </Section>
 

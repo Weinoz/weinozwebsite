@@ -3,6 +3,25 @@ import { games as defaultGames } from '@/data/games';
 
 const KEY = 'weinoz:games';
 
+// ── Site config (À propos page) ───────────────────────────────────────────────
+export interface SiteConfig {
+  bio?: string;
+  pc?: {
+    cpu?: string;
+    gpu?: string;
+    ram?: string;
+    screen?: string;
+    keyboard?: string;
+    mouse?: string;
+    headset?: string;
+  };
+  stream?: {
+    micro?: string;
+    webcam?: string;
+    software?: string;
+  };
+}
+
 function configured() {
   return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
 }
@@ -54,4 +73,23 @@ export async function getTopGameIds(): Promise<string[]> {
 export async function saveTopGameIds(ids: string[]): Promise<void> {
   if (!configured()) return;
   await redis(['SET', TOP_KEY, JSON.stringify(ids.slice(0, 5))]);
+}
+
+// ── Site config ───────────────────────────────────────────────────────────────
+const CONFIG_KEY = 'weinoz:config';
+
+export async function getSiteConfig(): Promise<SiteConfig> {
+  if (!configured()) return {};
+  try {
+    const raw = await redis(['GET', CONFIG_KEY]);
+    if (!raw) return {};
+    return JSON.parse(raw) as SiteConfig;
+  } catch {
+    return {};
+  }
+}
+
+export async function saveSiteConfig(config: SiteConfig): Promise<void> {
+  if (!configured()) return;
+  await redis(['SET', CONFIG_KEY, JSON.stringify(config)]);
 }

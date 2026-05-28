@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, useTransition } from 'react';
 import { Game, GameStatus, GamePlatform } from '@/data/games';
 import { RawgGame } from '@/lib/rawg';
-import { addGameAction, removeGameAction, logoutAction, setTopGamesAction } from '@/app/admin/actions';
-import { Star, Clock, Trash2, Plus, Search, X, LogOut, Gamepad2, Pencil, ExternalLink, Link, Video, RefreshCw, Trophy } from 'lucide-react';
+import { SiteConfig } from '@/lib/redis';
+import { addGameAction, removeGameAction, logoutAction, setTopGamesAction, saveSiteConfigAction } from '@/app/admin/actions';
+import { Star, Clock, Trash2, Plus, Search, X, LogOut, Gamepad2, Pencil, ExternalLink, Link, Video, RefreshCw, Trophy, User, Monitor, Mic } from 'lucide-react';
 
 const PLATFORMS: GamePlatform[] = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Switch', 'Mobile'];
 const STATUSES: { value: GameStatus; label: string; color: string }[] = [
@@ -15,13 +16,30 @@ const STATUSES: { value: GameStatus; label: string; color: string }[] = [
   { value: 'liste de souhaits', label: 'Wishlist',  color: '#eab308' },
 ];
 
-interface Props { initialGames: Game[]; initialTopIds: string[] }
+interface Props { initialGames: Game[]; initialTopIds: string[]; initialConfig: SiteConfig }
 
 type PanelMode = 'add' | 'edit' | null;
+type AdminTab = 'games' | 'about';
 
-export default function AdminPanel({ initialGames, initialTopIds }: Props) {
+export default function AdminPanel({ initialGames, initialTopIds, initialConfig }: Props) {
+  const [activeTab, setActiveTab] = useState<AdminTab>('games');
   const [games, setGames] = useState<Game[]>(initialGames);
   const [topIds, setTopIds] = useState<string[]>(initialTopIds);
+
+  // ── About / config state ──────────────────────────────────────────────────
+  const [bio, setBio] = useState(initialConfig.bio ?? '');
+  const [cfgCpu, setCfgCpu] = useState(initialConfig.pc?.cpu ?? '');
+  const [cfgGpu, setCfgGpu] = useState(initialConfig.pc?.gpu ?? '');
+  const [cfgRam, setCfgRam] = useState(initialConfig.pc?.ram ?? '');
+  const [cfgScreen, setCfgScreen] = useState(initialConfig.pc?.screen ?? '');
+  const [cfgKeyboard, setCfgKeyboard] = useState(initialConfig.pc?.keyboard ?? '');
+  const [cfgMouse, setCfgMouse] = useState(initialConfig.pc?.mouse ?? '');
+  const [cfgHeadset, setCfgHeadset] = useState(initialConfig.pc?.headset ?? '');
+  const [cfgMicro, setCfgMicro] = useState(initialConfig.stream?.micro ?? '');
+  const [cfgWebcam, setCfgWebcam] = useState(initialConfig.stream?.webcam ?? '');
+  const [cfgSoftware, setCfgSoftware] = useState(initialConfig.stream?.software ?? 'OBS Studio');
+  const [configSaved, setConfigSaved] = useState(false);
+  const [isPendingConfig, startConfigTransition] = useTransition();
 
   // Search
   const [query, setQuery] = useState('');
@@ -184,6 +202,31 @@ export default function AdminPanel({ initialGames, initialTopIds }: Props) {
     });
   }
 
+  function saveConfig() {
+    const config: SiteConfig = {
+      bio: bio.trim() || undefined,
+      pc: {
+        cpu: cfgCpu.trim() || undefined,
+        gpu: cfgGpu.trim() || undefined,
+        ram: cfgRam.trim() || undefined,
+        screen: cfgScreen.trim() || undefined,
+        keyboard: cfgKeyboard.trim() || undefined,
+        mouse: cfgMouse.trim() || undefined,
+        headset: cfgHeadset.trim() || undefined,
+      },
+      stream: {
+        micro: cfgMicro.trim() || undefined,
+        webcam: cfgWebcam.trim() || undefined,
+        software: cfgSoftware.trim() || undefined,
+      },
+    };
+    startConfigTransition(async () => {
+      await saveSiteConfigAction(config);
+      setConfigSaved(true);
+      setTimeout(() => setConfigSaved(false), 2500);
+    });
+  }
+
   const card: React.CSSProperties = {
     background: 'rgba(255,255,255,0.04)',
     border: '1px solid rgba(255,255,255,0.08)',
@@ -193,13 +236,19 @@ export default function AdminPanel({ initialGames, initialTopIds }: Props) {
     transition: 'border-color 0.2s, transform 0.15s',
   };
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '0.55rem 0.8rem', borderRadius: '8px',
+    border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)',
+    color: 'white', fontSize: '0.88rem', outline: 'none',
+  };
+
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem 1.5rem' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
         <div>
           <h1 style={{ fontWeight: 900, fontSize: '2rem', color: 'white', letterSpacing: '-0.03em' }}>
-            Jeux-Vidéothèque
+            Admin
           </h1>
           <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)', marginTop: '0.25rem' }}>
             {games.length} jeux enregistrés
@@ -217,6 +266,100 @@ export default function AdminPanel({ initialGames, initialTopIds }: Props) {
         </form>
       </div>
 
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '2rem', background: 'rgba(255,255,255,0.04)', padding: '0.25rem', borderRadius: '10px', width: 'fit-content' }}>
+        {([
+          { id: 'games', label: 'Jeux-Vidéothèque', icon: Gamepad2 },
+          { id: 'about', label: 'Page À propos',    icon: User     },
+        ] as { id: AdminTab; label: string; icon: React.ElementType }[]).map(({ id, label, icon: Icon }) => (
+          <button key={id} onClick={() => setActiveTab(id)} style={{
+            display: 'flex', alignItems: 'center', gap: '0.4rem',
+            padding: '0.45rem 1rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 600,
+            border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+            background: activeTab === id ? 'rgba(160,32,240,0.25)' : 'transparent',
+            color: activeTab === id ? '#c084fc' : 'rgba(255,255,255,0.35)',
+          }}>
+            <Icon className="w-3.5 h-3.5" /> {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── TAB: À PROPOS ── */}
+      {activeTab === 'about' && (
+        <div style={{ maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+
+          {/* Bio */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+              <User className="w-4 h-4" style={{ color: '#c084fc' }} />
+              <p style={{ fontWeight: 700, color: 'white', fontSize: '0.95rem' }}>Présentation</p>
+            </div>
+            <label className="section-label" style={{ display: 'block', marginBottom: '0.4rem' }}>Bio / description</label>
+            <textarea value={bio} onChange={(e) => setBio(e.target.value)}
+              placeholder="Présente-toi en quelques lignes…" rows={4}
+              style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
+            />
+          </div>
+
+          {/* PC Config */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+              <Monitor className="w-4 h-4" style={{ color: '#c084fc' }} />
+              <p style={{ fontWeight: 700, color: 'white', fontSize: '0.95rem' }}>Config PC</p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {([
+                { label: 'CPU',     value: cfgCpu,     set: setCfgCpu,     placeholder: 'ex: Intel Core i9-14900K' },
+                { label: 'GPU',     value: cfgGpu,     set: setCfgGpu,     placeholder: 'ex: NVIDIA RTX 4090' },
+                { label: 'RAM',     value: cfgRam,     set: setCfgRam,     placeholder: 'ex: 32 Go DDR5' },
+                { label: 'Écran',   value: cfgScreen,  set: setCfgScreen,  placeholder: 'ex: LG 27GP850-B 165Hz' },
+                { label: 'Clavier', value: cfgKeyboard,set: setCfgKeyboard,placeholder: 'ex: Keychron Q1' },
+                { label: 'Souris',  value: cfgMouse,   set: setCfgMouse,   placeholder: 'ex: Logitech G Pro X Superlight' },
+                { label: 'Casque',  value: cfgHeadset, set: setCfgHeadset, placeholder: 'ex: HyperX Cloud Alpha' },
+              ] as { label: string; value: string; set: (v: string) => void; placeholder: string }[]).map(({ label, value, set, placeholder }) => (
+                <div key={label} style={{ display: 'grid', gridTemplateColumns: '90px 1fr', alignItems: 'center', gap: '0.75rem' }}>
+                  <label className="section-label" style={{ textAlign: 'right' }}>{label}</label>
+                  <input type="text" value={value} onChange={(e) => set(e.target.value)} placeholder={placeholder} style={inputStyle} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Stream setup */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+              <Mic className="w-4 h-4" style={{ color: '#c084fc' }} />
+              <p style={{ fontWeight: 700, color: 'white', fontSize: '0.95rem' }}>Setup stream</p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {([
+                { label: 'Micro',    value: cfgMicro,   set: setCfgMicro,   placeholder: 'ex: Blue Yeti X' },
+                { label: 'Webcam',   value: cfgWebcam,  set: setCfgWebcam,  placeholder: 'ex: Elgato Facecam' },
+                { label: 'Logiciel', value: cfgSoftware,set: setCfgSoftware,placeholder: 'OBS Studio' },
+              ] as { label: string; value: string; set: (v: string) => void; placeholder: string }[]).map(({ label, value, set, placeholder }) => (
+                <div key={label} style={{ display: 'grid', gridTemplateColumns: '90px 1fr', alignItems: 'center', gap: '0.75rem' }}>
+                  <label className="section-label" style={{ textAlign: 'right' }}>{label}</label>
+                  <input type="text" value={value} onChange={(e) => set(e.target.value)} placeholder={placeholder} style={inputStyle} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Save button */}
+          <button onClick={saveConfig} disabled={isPendingConfig} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+            padding: '0.85rem', borderRadius: '10px', border: 'none', cursor: isPendingConfig ? 'not-allowed' : 'pointer',
+            background: configSaved ? 'linear-gradient(135deg,#16a34a,#22c55e)' : 'linear-gradient(135deg,#7c3aed,#a855f7)',
+            color: 'white', fontWeight: 700, fontSize: '0.95rem', transition: 'background 0.3s',
+            opacity: isPendingConfig ? 0.7 : 1,
+          }}>
+            {isPendingConfig ? 'Sauvegarde…' : configSaved ? '✓ Sauvegardé !' : 'Enregistrer la page À propos'}
+          </button>
+        </div>
+      )}
+
+      {/* ── TAB: JEUX ── */}
+      {activeTab === 'games' && (
       <div style={{ display: 'grid', gridTemplateColumns: panelMode ? '1fr 380px' : '1fr', gap: '2rem', alignItems: 'start' }}>
         {/* Left: search + results + library */}
         <div>
@@ -371,7 +514,7 @@ export default function AdminPanel({ initialGames, initialTopIds }: Props) {
         {/* Right: add / edit panel */}
         {panelMode && (
           <div style={{
-            position: 'sticky', top: '80px',
+            position: 'sticky', top: '5rem',
             background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(160,32,240,0.25)',
             borderRadius: '16px', overflow: 'hidden',
           }}>
@@ -534,6 +677,7 @@ export default function AdminPanel({ initialGames, initialTopIds }: Props) {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
