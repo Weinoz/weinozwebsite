@@ -75,6 +75,12 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   const [isPending, startTransition] = useTransition();
   const [syncing, setSyncing] = useState<string | null>(null); // game id being synced
 
+  // Cover picker
+  const [coverPickerGame, setCoverPickerGame] = useState<Game | null>(null);
+  const [coverPickerResults, setCoverPickerResults] = useState<RawgGame[]>([]);
+  const [coverPickerLoading, setCoverPickerLoading] = useState(false);
+  const [coverPickerQuery, setCoverPickerQuery] = useState('');
+
   // Manual add fields
   const [manualTitle, setManualTitle] = useState('');
   const [manualCover, setManualCover] = useState('');
@@ -189,13 +195,60 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
     });
   }
 
-  async function syncGameCover(game: Game) {
+  /** Opens the cover picker for a specific game, pre-searches RAWG with its title. */
+  async function openCoverPicker(game: Game) {
+    setCoverPickerGame(game);
+    setCoverPickerQuery(game.title);
+    setCoverPickerResults([]);
+    setCoverPickerLoading(true);
+    try {
+      const res = await fetch(`/api/rawg?q=${encodeURIComponent(game.title)}`);
+      setCoverPickerResults(await res.json());
+    } catch { /* ignore */ }
+    finally { setCoverPickerLoading(false); }
+  }
+
+  /** Search within the picker (user changed the query). */
+  async function searchInPicker(q: string) {
+    if (!q.trim()) return;
+    setCoverPickerLoading(true);
+    setCoverPickerResults([]);
+    try {
+      const res = await fetch(`/api/rawg?q=${encodeURIComponent(q)}`);
+      setCoverPickerResults(await res.json());
+    } catch { /* ignore */ }
+    finally { setCoverPickerLoading(false); }
+  }
+
+  /** Apply a RAWG result as cover for the game in the picker. */
+  async function applyCoverFromPicker(rawg: RawgGame) {
+    if (!coverPickerGame) return;
+    const updated: Game = {
+      ...coverPickerGame,
+      cover: rawg.background_image ?? coverPickerGame.cover,
+      rawgId: rawg.id,
+      genre: coverPickerGame.genre ?? rawg.genres?.[0]?.name,
+      year: coverPickerGame.year ?? (rawg.released ? new Date(rawg.released).getFullYear() : undefined),
+    };
+    setSyncing(coverPickerGame.id);
+    try {
+      await addGameAction(updated);
+      setGames((prev) => prev.map((g) => g.id === coverPickerGame.id ? updated : g));
+      if (editingGame?.id === coverPickerGame.id) setEditingGame(updated);
+      setCoverPickerGame(null);
+      setCoverPickerResults([]);
+    } catch { /* ignore */ }
+    finally { setSyncing(null); }
+  }
+
+  /** Auto-sync (first RAWG result) — used only by the bulk "Sync covers" button. */
+  async function autoSyncCover(game: Game) {
     setSyncing(game.id);
     try {
       const res = await fetch(`/api/rawg?q=${encodeURIComponent(game.title)}`);
-      const results: RawgGame[] = await res.json();
-      if (!results.length) return;
-      const rawg = results[0];
+      const hits: RawgGame[] = await res.json();
+      if (!hits.length) return;
+      const rawg = hits[0];
       const updated: Game = {
         ...game,
         cover: rawg.background_image ?? game.cover,
@@ -220,8 +273,8 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   async function syncAllCovers() {
     const toSync = games.filter((g) => !g.cover && !g.rawgId && !g.id.startsWith('rawg-'));
     for (const game of toSync) {
-      await syncGameCover(game);
-      await new Promise((r) => setTimeout(r, 300)); // small delay between calls
+      await autoSyncCover(game);
+      await new Promise((r) => setTimeout(r, 300));
     }
   }
 
@@ -563,13 +616,18 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                     >
                       <Star className="w-4 h-4" style={{ fill: topIds.includes(g.id) ? '#facc15' : 'transparent' }} />
                     </button>
-                    {/* Sync cover button — only for games without RAWG link */}
-                    {!g.cover && !g.rawgId && !g.id.startsWith('rawg-') && (
-                      <button onClick={() => syncGameCover(g)} disabled={!!syncing} title="Trouver la cover sur RAWG"
-                        style={{ background: 'none', border: 'none', color: 'rgba(6,182,212,0.5)', cursor: 'pointer', padding: '0.25rem' }}>
-                        <RefreshCw className="w-4 h-4" style={{ animation: syncing === g.id ? 'spin 1s linear infinite' : 'none' }} />
-                      </button>
-                    )}
+                    {/* Cover picker button — always visible */}
+                    <button
+                      onClick={() => openCoverPicker(g)}
+                      disabled={!!syncing}
+                      title={g.cover ? 'Changer la cover' : 'Chercher une cover sur RAWG'}
+                      style={{
+                        background: 'none', border: 'none', cursor: syncing ? 'not-allowed' : 'pointer', padding: '0.25rem',
+                        color: g.cover ? 'rgba(255,255,255,0.18)' : 'rgba(6,182,212,0.55)',
+                      }}
+                    >
+                      <RefreshCw className="w-4 h-4" style={{ animation: syncing === g.id ? 'spin 1s linear infinite' : 'none' }} />
+                    </button>
                     {g.storeUrl && (
                       <a href={g.storeUrl} target="_blank" rel="noopener noreferrer"
                         style={{ background: 'none', border: 'none', color: 'rgba(160,32,240,0.5)', cursor: 'pointer', padding: '0.25rem', display: 'flex' }}
@@ -647,9 +705,25 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                       {[panelYear, panelGenre].filter(Boolean).join(' · ')}
                     </p>
                   )}
-                  <p style={{ fontSize: '0.7rem', color: 'rgba(160,32,240,0.6)', marginTop: '0.2rem', fontWeight: 600 }}>
-                    {panelMode === 'edit' ? 'Mode édition' : panelMode === 'manual' ? 'Ajout manuel' : 'Nouveau jeu'}
-                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.2rem' }}>
+                    <p style={{ fontSize: '0.7rem', color: 'rgba(160,32,240,0.6)', fontWeight: 600 }}>
+                      {panelMode === 'edit' ? 'Mode édition' : panelMode === 'manual' ? 'Ajout manuel' : 'Nouveau jeu'}
+                    </p>
+                    {panelMode === 'edit' && editingGame && (
+                      <button
+                        onClick={() => openCoverPicker(editingGame)}
+                        title="Changer la cover via RAWG"
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                          background: 'none', border: '1px solid rgba(6,182,212,0.3)',
+                          borderRadius: '5px', padding: '0.1rem 0.4rem',
+                          color: 'rgba(6,182,212,0.7)', fontSize: '0.62rem', fontWeight: 600, cursor: 'pointer',
+                        }}
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" /> Changer la cover
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <button onClick={closePanel} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', flexShrink: 0 }}>
                   <X className="w-4 h-4" />
@@ -842,6 +916,126 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
           </div>
         )}
       </div>
+      )}
+
+      {/* ── COVER PICKER MODAL ── */}
+      {coverPickerGame && (
+        <div
+          onClick={() => { setCoverPickerGame(null); setCoverPickerResults([]); }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '1rem',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: '660px',
+              background: '#0D0020', border: '1px solid rgba(160,32,240,0.3)',
+              borderRadius: '16px', overflow: 'hidden',
+              display: 'flex', flexDirection: 'column', maxHeight: '85vh',
+            }}
+          >
+            {/* Header */}
+            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexShrink: 0 }}>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.1rem' }}>
+                  Choisir une cover
+                </p>
+                <p style={{ fontWeight: 700, color: 'white', fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {coverPickerGame.title}
+                </p>
+              </div>
+              <button
+                onClick={() => { setCoverPickerGame(null); setCoverPickerResults([]); }}
+                style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', cursor: 'pointer', flexShrink: 0 }}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Search bar */}
+            <div style={{ padding: '0.75rem 1.25rem', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+              <input
+                type="text"
+                value={coverPickerQuery}
+                onChange={(e) => setCoverPickerQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') searchInPicker(coverPickerQuery); }}
+                placeholder="Nom du jeu…"
+                style={{
+                  flex: 1, padding: '0.5rem 0.75rem', borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.06)',
+                  color: 'white', fontSize: '0.88rem', outline: 'none',
+                }}
+              />
+              <button
+                onClick={() => searchInPicker(coverPickerQuery)}
+                disabled={coverPickerLoading || !coverPickerQuery.trim()}
+                style={{
+                  padding: '0.5rem 1rem', borderRadius: '8px',
+                  background: 'rgba(160,32,240,0.2)', border: '1px solid rgba(160,32,240,0.4)',
+                  color: '#c084fc', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
+                  opacity: coverPickerLoading ? 0.6 : 1,
+                }}
+              >
+                {coverPickerLoading ? '…' : 'Chercher'}
+              </button>
+            </div>
+
+            {/* Results grid */}
+            <div style={{ overflowY: 'auto', padding: '0.75rem 1rem', flex: 1 }}>
+              {coverPickerLoading && (
+                <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: '0.85rem', textAlign: 'center', padding: '3rem 0' }}>
+                  Recherche en cours…
+                </p>
+              )}
+              {!coverPickerLoading && coverPickerResults.length === 0 && (
+                <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: '0.85rem', textAlign: 'center', padding: '3rem 0' }}>
+                  Aucun résultat — modifie la recherche ci-dessus.
+                </p>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '0.6rem' }}>
+                {coverPickerResults.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => applyCoverFromPicker(r)}
+                    title={`Appliquer : ${r.name}`}
+                    style={{
+                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '9px', overflow: 'hidden', cursor: 'pointer', textAlign: 'left', padding: 0,
+                      transition: 'border-color 0.15s, transform 0.15s',
+                    }}
+                    className="hover:border-purple-500 hover:scale-[1.02]"
+                  >
+                    {r.background_image ? (
+                      <img src={r.background_image} alt={r.name} style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }} />
+                    ) : (
+                      <div style={{ width: '100%', aspectRatio: '16/9', background: 'rgba(160,32,240,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Gamepad2 style={{ color: 'rgba(160,32,240,0.3)', width: '1.5rem', height: '1.5rem' }} />
+                      </div>
+                    )}
+                    <div style={{ padding: '0.4rem 0.55rem 0.5rem' }}>
+                      <p style={{ fontSize: '0.7rem', fontWeight: 600, color: 'rgba(255,255,255,0.75)', lineHeight: 1.35 }}>{r.name}</p>
+                      {r.released && (
+                        <p style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', marginTop: '0.15rem' }}>
+                          {new Date(r.released).getFullYear()}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ padding: '0.6rem 1.25rem', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+              <p style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.18)' }}>
+                Clique sur une cover pour l&apos;appliquer · Echap ou clic extérieur pour annuler
+              </p>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
