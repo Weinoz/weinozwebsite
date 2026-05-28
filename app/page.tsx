@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, ArrowUpRight, Gamepad2 } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Gamepad2, Radio, Calendar, Users } from 'lucide-react';
 import VideoCard from '@/components/VideoCard';
 import GameCard from '@/components/GameCard';
 import {
@@ -7,7 +7,7 @@ import {
   InstagramIcon, XIcon, DiscordIcon,
 } from '@/components/SocialIcons';
 import { fetchYouTubeVideos } from '@/lib/youtube';
-import { fetchTwitchVideos } from '@/lib/twitch';
+import { fetchTwitchVideos, fetchTwitchLiveInfo, fetchTwitchSchedule, twitchLiveThumbnail, LiveInfo, ScheduleSegment } from '@/lib/twitch';
 import { getGames, getTopGameIds } from '@/lib/redis';
 
 export const dynamic = 'force-dynamic';
@@ -22,16 +22,25 @@ const socialPlatforms = [
 ];
 
 export default async function HomePage() {
-  const [youtubeVideos, twitchVideos, allGames, topIds] = await Promise.all([
+  const hasTwitch = !!(process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET && process.env.TWITCH_LOGIN);
+  const twitchLogin = process.env.TWITCH_LOGIN ?? '';
+
+  const [youtubeVideos, twitchVideos, allGames, topIds, liveInfo, schedule] = await Promise.all([
     process.env.YOUTUBE_CHANNEL_ID
       ? fetchYouTubeVideos(process.env.YOUTUBE_CHANNEL_ID)
       : Promise.resolve([]),
-    process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET && process.env.TWITCH_LOGIN
-      ? fetchTwitchVideos(process.env.TWITCH_CLIENT_ID, process.env.TWITCH_CLIENT_SECRET, process.env.TWITCH_LOGIN)
+    hasTwitch
+      ? fetchTwitchVideos(process.env.TWITCH_CLIENT_ID!, process.env.TWITCH_CLIENT_SECRET!, twitchLogin)
       : Promise.resolve([]),
     getGames(),
     getTopGameIds(),
-  ]);
+    hasTwitch
+      ? fetchTwitchLiveInfo(process.env.TWITCH_CLIENT_ID!, process.env.TWITCH_CLIENT_SECRET!, twitchLogin)
+      : Promise.resolve(null),
+    hasTwitch
+      ? fetchTwitchSchedule(process.env.TWITCH_CLIENT_ID!, process.env.TWITCH_CLIENT_SECRET!, twitchLogin, 4)
+      : Promise.resolve([]),
+  ] as const);
 
   const topGames = topIds
     .map((id) => allGames.find((g) => g.id === id))
@@ -46,6 +55,16 @@ export default async function HomePage() {
     .slice(0, 8);
 
   const completedCount = allGames.filter((g) => g.status === 'terminé').length;
+
+  // Match live game to library
+  const liveLibraryGame = liveInfo?.gameName
+    ? allGames.find((g) => g.title.toLowerCase() === liveInfo.gameName.toLowerCase())
+    : null;
+
+  // Future schedule segments only
+  const futureSchedule = (schedule as ScheduleSegment[]).filter(
+    (s) => new Date(s.startTime) > new Date(),
+  ).slice(0, 4);
 
   // Game covers for the hero strip
   const heroCoverGames = allGames.filter((g) => g.cover).slice(0, 6);
@@ -156,6 +175,127 @@ export default async function HomePage() {
           )}
         </div>
       </section>
+
+      {/* ── EN CE MOMENT ── */}
+      {(liveInfo || futureSchedule.length > 0) && (
+        <section style={{ background: 'var(--purple-ink)', padding: '4rem 0' }}>
+          <div className="max-w-7xl mx-auto px-5 sm:px-8">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '2rem' }}>
+              {liveInfo ? (
+                <>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                    background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)',
+                    color: '#fca5a5', borderRadius: '100px', padding: '0.2rem 0.7rem',
+                    fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em',
+                  }}>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ef4444', animation: 'pulse-live 1.4s ease-in-out infinite' }} />
+                    LIVE
+                  </span>
+                  <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'white' }}>En ce moment</h2>
+                </>
+              ) : (
+                <>
+                  <Calendar className="w-4 h-4" style={{ color: 'rgba(160,32,240,0.6)' }} />
+                  <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'rgba(255,255,255,0.7)' }}>Prochains streams</h2>
+                </>
+              )}
+            </div>
+
+            {/* Live card */}
+            {liveInfo && (
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr auto', gap: '1.5rem',
+                background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)',
+                borderRadius: '16px', overflow: 'hidden', marginBottom: futureSchedule.length > 0 ? '2rem' : 0,
+              }}
+                className="sm:grid-cols-[1fr_auto]"
+              >
+                {/* Info */}
+                <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', justifyContent: 'center' }}>
+                  <p style={{ fontSize: '1.1rem', fontWeight: 700, color: 'white', lineHeight: 1.4 }}>
+                    {liveInfo.title}
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                    {liveInfo.gameName && (
+                      <span style={{ fontSize: '0.8rem', color: '#c084fc', fontWeight: 600 }}>
+                        🎮 {liveInfo.gameName}
+                      </span>
+                    )}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)' }}>
+                      <Users className="w-3.5 h-3.5" /> {liveInfo.viewerCount.toLocaleString('fr-FR')} spectateurs
+                    </span>
+                  </div>
+                  <a
+                    href={`https://www.twitch.tv/${twitchLogin}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                      background: '#9147ff', color: 'white',
+                      padding: '0.5rem 1.1rem', borderRadius: '100px',
+                      fontWeight: 700, fontSize: '0.8rem', textDecoration: 'none',
+                      alignSelf: 'flex-start',
+                    }}
+                  >
+                    <Radio className="w-3.5 h-3.5" /> Regarder
+                  </a>
+                </div>
+
+                {/* Thumbnail + library cover */}
+                <div style={{ display: 'flex', gap: '0.75rem', padding: '1rem 1rem 1rem 0', alignItems: 'center' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={liveInfo.thumbnailUrl || twitchLiveThumbnail(twitchLogin)}
+                    alt={liveInfo.title}
+                    style={{ width: '180px', height: '101px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }}
+                  />
+                  {liveLibraryGame?.cover && (
+                    <Link href={`/jeux/${liveLibraryGame.id}`} title={liveLibraryGame.title}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={liveLibraryGame.cover}
+                        alt={liveLibraryGame.title}
+                        style={{ width: '68px', height: '90px', objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }}
+                      />
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Schedule */}
+            {futureSchedule.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {futureSchedule.map((seg) => {
+                  const dt = new Date(seg.startTime);
+                  const day = dt.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+                  const time = dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                  return (
+                    <div key={seg.id} style={{
+                      display: 'flex', alignItems: 'center', gap: '1rem',
+                      padding: '0.75rem 1rem', borderRadius: '10px',
+                      background: 'rgba(168,85,247,0.05)', border: '1px solid rgba(168,85,247,0.1)',
+                    }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'rgba(255,255,255,0.4)', width: '110px', flexShrink: 0 }}>
+                        {day} · {time}
+                      </span>
+                      <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)', fontWeight: 600, flex: 1 }}>
+                        {seg.title || 'Stream'}
+                      </span>
+                      {seg.gameName && (
+                        <span style={{ fontSize: '0.75rem', color: '#c084fc', fontWeight: 600, flexShrink: 0 }}>
+                          {seg.gameName}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* ── MON TOP 5 ── */}
       {topGames.length > 0 && (

@@ -45,6 +45,101 @@ function formatViews(n: number): string {
   return String(n);
 }
 
+// ── Shared live thumbnail (no API needed) ────────────────────────────────────
+export function twitchLiveThumbnail(login: string) {
+  return `https://static-cdn.jtvnw.net/previews-ttv/live_user_${login.toLowerCase()}-640x360.jpg`;
+}
+
+// ── Live info (full) ──────────────────────────────────────────────────────────
+
+export interface LiveInfo {
+  streamId: string;
+  title: string;
+  gameName: string;
+  twitchGameId: string;
+  viewerCount: number;
+  startedAt: string; // ISO
+  thumbnailUrl: string;
+}
+
+export async function fetchTwitchLiveInfo(
+  clientId: string,
+  clientSecret: string,
+  login: string,
+): Promise<LiveInfo | null> {
+  const token = await getToken(clientId, clientSecret);
+  if (!token) return null;
+  try {
+    const res = await fetch(
+      `https://api.twitch.tv/helix/streams?user_login=${login}`,
+      {
+        headers: { 'Client-ID': clientId, Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const s = data.data?.[0];
+    if (!s) return null;
+    return {
+      streamId: s.id,
+      title: s.title ?? '',
+      gameName: s.game_name ?? '',
+      twitchGameId: s.game_id ?? '',
+      viewerCount: s.viewer_count ?? 0,
+      startedAt: s.started_at,
+      thumbnailUrl: s.thumbnail_url
+        ? s.thumbnail_url.replace('{width}', '640').replace('{height}', '360')
+        : twitchLiveThumbnail(login),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── Schedule ──────────────────────────────────────────────────────────────────
+
+export interface ScheduleSegment {
+  id: string;
+  startTime: string; // ISO
+  endTime: string;
+  title: string;
+  gameName: string | null;
+}
+
+export async function fetchTwitchSchedule(
+  clientId: string,
+  clientSecret: string,
+  login: string,
+  count = 5,
+): Promise<ScheduleSegment[]> {
+  const token = await getToken(clientId, clientSecret);
+  if (!token) return [];
+  const userId = await getUserId(clientId, token, login);
+  if (!userId) return [];
+  try {
+    const res = await fetch(
+      `https://api.twitch.tv/helix/schedule?broadcaster_id=${userId}&first=${count}`,
+      {
+        headers: { 'Client-ID': clientId, Authorization: `Bearer ${token}` },
+        next: { revalidate: 3600 },
+      },
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data.data?.segments ?? []).map((seg: any) => ({
+      id: seg.id,
+      startTime: seg.start_time,
+      endTime: seg.end_time,
+      title: seg.title ?? '',
+      gameName: seg.category?.name ?? null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 /** Check if the user is currently live and return the stream game (for game-capture logic). */
 export async function fetchTwitchLiveStream(
   clientId: string,
