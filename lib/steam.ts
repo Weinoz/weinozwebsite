@@ -14,6 +14,17 @@ export interface SteamPrice {
   isFree: boolean;
 }
 
+// ── Owned Games (via Steam Web API) ──────────────────────────────────────────
+
+export interface SteamOwnedGame {
+  appId: number;
+  name: string;
+  playtimeMinutes: number; // playtime_forever from Steam API
+  headerUrl: string;       // header.jpg (16:9)
+  coverUrl: string;        // library_600x900.jpg (portrait, may 404)
+  storeUrl: string;
+}
+
 /** Search the Steam store and return simplified hits. */
 export async function searchSteam(query: string): Promise<SteamSearchHit[]> {
   try {

@@ -209,6 +209,65 @@ export async function linkVideoToGameAction(
   revalidatePath('/');
 }
 
+// ── Steam Import ──────────────────────────────────────────────────────────────
+
+export interface SteamImportGame {
+  appId: number;
+  name: string;
+  playtimeMinutes: number;
+  coverUrl: string;
+  storeUrl: string;
+  alreadyInLibrary: boolean;
+}
+
+/**
+ * Check which Steam app IDs are already in the library,
+ * then return enriched list to the client.
+ */
+export async function getSteamImportStatusAction(
+  appIds: number[],
+): Promise<Record<number, boolean>> {
+  const games = await getGames();
+  const libraryIds = new Set(
+    games
+      .map((g) => g.id.replace(/^steam-/, ''))
+      .filter((id) => !isNaN(Number(id)))
+      .map(Number),
+  );
+  return Object.fromEntries(appIds.map((id) => [id, libraryIds.has(id)]));
+}
+
+/**
+ * Import the selected Steam games into the library.
+ * Skips any that already exist (matching id: steam-{appId}).
+ */
+export async function importSteamGamesAction(
+  selections: { appId: number; name: string; playtimeMinutes: number; coverUrl: string; headerUrl: string; storeUrl: string }[],
+): Promise<{ imported: number }> {
+  const games = await getGames();
+  const existingIds = new Set(games.map((g) => g.id));
+
+  const toAdd: Game[] = selections
+    .filter((s) => !existingIds.has(`steam-${s.appId}`))
+    .map((s) => ({
+      id: `steam-${s.appId}`,
+      title: s.name,
+      cover: s.headerUrl, // use header (16:9) as default, portrait may 404
+      platform: 'PC' as const,
+      status: 'terminé' as const,
+      hours: s.playtimeMinutes > 0 ? Math.round(s.playtimeMinutes / 60) : undefined,
+      storeUrl: s.storeUrl,
+    }));
+
+  if (toAdd.length === 0) return { imported: 0 };
+
+  await saveGames([...toAdd, ...games]);
+  revalidatePath('/jeux');
+  revalidatePath('/');
+  revalidatePath('/stats');
+  return { imported: toAdd.length };
+}
+
 export async function syncVideoLinksAction(): Promise<{ added: number; gamesUpdated: number }> {
   const [games, ytVideos, twitchVideos] = await Promise.all([
     getGames(),

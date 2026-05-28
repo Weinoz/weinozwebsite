@@ -5,7 +5,8 @@ import { Game, GameStatus, GamePlatform, GameTier } from '@/data/games';
 import { RawgGame } from '@/lib/rawg';
 import { SiteConfig } from '@/lib/redis';
 import { SteamSearchHit, SteamGameInfo } from '@/lib/steam';
-import { addGameAction, removeGameAction, logoutAction, setTopGamesAction, saveSiteConfigAction, syncVideoLinksAction, fetchVideosForAdminAction, linkVideoToGameAction, AdminVideo } from '@/app/admin/actions';
+import { addGameAction, removeGameAction, logoutAction, setTopGamesAction, saveSiteConfigAction, syncVideoLinksAction, fetchVideosForAdminAction, linkVideoToGameAction, importSteamGamesAction, AdminVideo } from '@/app/admin/actions';
+import { SteamOwnedGame } from '@/lib/steam';
 import { Star, Clock, Trash2, Plus, Search, X, LogOut, Gamepad2, Pencil, ExternalLink, Link, Video, RefreshCw, Trophy, User, Monitor, Mic } from 'lucide-react';
 
 const PLATFORMS: GamePlatform[] = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Switch', 'Mobile'];
@@ -28,7 +29,7 @@ const STATUSES: { value: GameStatus; label: string; color: string }[] = [
 interface Props { initialGames: Game[]; initialTopIds: string[]; initialConfig: SiteConfig }
 
 type PanelMode = 'add' | 'edit' | 'manual' | 'steam' | null;
-type AdminTab = 'games' | 'about' | 'videos';
+type AdminTab = 'games' | 'about' | 'videos' | 'import';
 
 export default function AdminPanel({ initialGames, initialTopIds, initialConfig }: Props) {
   const [activeTab, setActiveTab] = useState<AdminTab>('games');
@@ -92,6 +93,19 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   const [savingVideoId, setSavingVideoId] = useState<string | null>(null);
   // Pending game assignment per video id (before user clicks save)
   const [pendingAssign, setPendingAssign] = useState<Record<string, string | null>>({});
+
+  // ── Steam Import tab state ───────────────────────────────────────────────
+  const [steamOwned, setSteamOwned]               = useState<SteamOwnedGame[]>([]);
+  const [steamImportLoading, setSteamImportLoading] = useState(false);
+  const [steamImportError, setSteamImportError]     = useState<string | null>(null);
+  const [steamSelected, setSteamSelected]           = useState<Set<number>>(new Set());
+  const [steamSearch, setSteamSearch]               = useState('');
+  const [steamImporting, setSteamImporting]         = useState(false);
+  const [steamImportResult, setSteamImportResult]   = useState<string | null>(null);
+  // Track which app IDs are already in library
+  const existingSteamIds = new Set(
+    games.map((g) => g.id).filter((id) => id.startsWith('steam-')).map((id) => Number(id.slice(6))),
+  );
 
   // Cover picker
   const [coverPickerGame, setCoverPickerGame] = useState<Game | null>(null);
@@ -420,8 +434,56 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
     if (activeTab === 'videos' && adminVideos.length === 0 && !videosLoading) {
       loadAdminVideos();
     }
+    if (activeTab === 'import' && steamOwned.length === 0 && !steamImportLoading) {
+      loadSteamOwned();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  async function loadSteamOwned() {
+    setSteamImportLoading(true);
+    setSteamImportError(null);
+    try {
+      const res = await fetch('/api/steam/owned');
+      const data = await res.json();
+      if (data.error) { setSteamImportError(data.error); return; }
+      setSteamOwned(data as SteamOwnedGame[]);
+    } catch {
+      setSteamImportError('Erreur lors de la récupération des jeux Steam.');
+    } finally {
+      setSteamImportLoading(false);
+    }
+  }
+
+  async function importSelected() {
+    if (steamSelected.size === 0) return;
+    setSteamImporting(true);
+    setSteamImportResult(null);
+    try {
+      const toImport = steamOwned
+        .filter((g) => steamSelected.has(g.appId))
+        .map((g) => ({
+          appId: g.appId,
+          name: g.name,
+          playtimeMinutes: g.playtimeMinutes,
+          coverUrl: g.coverUrl,
+          headerUrl: g.headerUrl,
+          storeUrl: g.storeUrl,
+        }));
+      const { imported } = await importSteamGamesAction(toImport);
+      setSteamImportResult(`✓ ${imported} jeu${imported > 1 ? 'x' : ''} importé${imported > 1 ? 's' : ''} !`);
+      setSteamSelected(new Set());
+      // Refresh games list
+      const res = await fetch('/api/export/games');
+      const json = await res.json();
+      if (json.games) setGames(json.games);
+    } catch {
+      setSteamImportResult('Erreur lors de l\'import.');
+    } finally {
+      setSteamImporting(false);
+      setTimeout(() => setSteamImportResult(null), 4000);
+    }
+  }
 
   async function saveVideoAssignment(video: AdminVideo, gameId: string | null) {
     setSavingVideoId(video.id);
@@ -543,6 +605,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
           { id: 'games',  label: 'Jeux-Vidéothèque', icon: Gamepad2 },
           { id: 'about',  label: 'Page À propos',    icon: User     },
           { id: 'videos', label: 'Vidéos',           icon: Video    },
+          { id: 'import', label: 'Import Steam',     icon: Monitor  },
         ] as { id: AdminTab; label: string; icon: React.ElementType }[]).map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setActiveTab(id)} style={{
             display: 'flex', alignItems: 'center', gap: '0.4rem',
@@ -839,6 +902,187 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
               Les jeux avec 🔍 sont des suggestions automatiques (titre, tags, catégorie Twitch)
             </p>
           )}
+        </div>
+      )}
+
+      {/* ── TAB: IMPORT STEAM ── */}
+      {activeTab === 'import' && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div>
+              <h2 style={{ fontWeight: 800, color: 'white', fontSize: '1rem' }}>Import depuis Steam</h2>
+              <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)', marginTop: '0.2rem' }}>
+                Coche les jeux à importer. Les jeux déjà dans la bibliothèque sont grisés.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              {steamSelected.size > 0 && (
+                <span style={{ fontSize: '0.8rem', color: '#c084fc', fontWeight: 600 }}>
+                  {steamSelected.size} sélectionné{steamSelected.size > 1 ? 's' : ''}
+                </span>
+              )}
+              <button
+                onClick={() => {
+                  const visible = steamOwned.filter((g) =>
+                    !existingSteamIds.has(g.appId) &&
+                    (!steamSearch.trim() || g.name.toLowerCase().includes(steamSearch.toLowerCase()))
+                  );
+                  if (steamSelected.size === visible.length) {
+                    setSteamSelected(new Set());
+                  } else {
+                    setSteamSelected(new Set(visible.map((g) => g.appId)));
+                  }
+                }}
+                style={{
+                  padding: '0.4rem 0.8rem', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 600,
+                  border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
+                  color: 'rgba(255,255,255,0.5)', cursor: 'pointer',
+                }}
+              >
+                {steamSelected.size > 0 ? 'Tout décocher' : 'Tout sélectionner'}
+              </button>
+              <button
+                onClick={importSelected}
+                disabled={steamSelected.size === 0 || steamImporting}
+                style={{
+                  padding: '0.4rem 0.9rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700,
+                  background: steamSelected.size > 0 ? '#7c3aed' : 'rgba(255,255,255,0.05)',
+                  border: '1px solid ' + (steamSelected.size > 0 ? '#9333ea' : 'rgba(255,255,255,0.1)'),
+                  color: steamSelected.size > 0 ? 'white' : 'rgba(255,255,255,0.3)',
+                  cursor: steamSelected.size > 0 ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {steamImporting ? 'Import…' : `Importer (${steamSelected.size})`}
+              </button>
+              <button onClick={() => { setSteamOwned([]); setSteamSelected(new Set()); loadSteamOwned(); }}
+                style={{
+                  padding: '0.4rem 0.7rem', borderRadius: '8px', fontSize: '0.75rem',
+                  border: '1px solid rgba(255,255,255,0.08)', background: 'transparent',
+                  color: 'rgba(255,255,255,0.3)', cursor: 'pointer',
+                }}>
+                ↺
+              </button>
+            </div>
+          </div>
+
+          {steamImportResult && (
+            <p style={{ color: steamImportResult.startsWith('✓') ? '#4ade80' : '#f87171', fontWeight: 600, fontSize: '0.85rem', marginBottom: '1rem' }}>
+              {steamImportResult}
+            </p>
+          )}
+
+          {/* Search filter */}
+          {steamOwned.length > 0 && (
+            <div style={{ position: 'relative', marginBottom: '1rem' }}>
+              <Search className="w-4 h-4" style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)', pointerEvents: 'none' }} />
+              <input
+                type="text" value={steamSearch} onChange={(e) => setSteamSearch(e.target.value)}
+                placeholder="Filtrer les jeux Steam…"
+                style={{
+                  width: '100%', padding: '0.55rem 0.75rem 0.55rem 2.25rem',
+                  borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'rgba(255,255,255,0.04)', color: 'white', fontSize: '0.85rem', outline: 'none',
+                }}
+              />
+            </div>
+          )}
+
+          {/* States */}
+          {steamImportLoading && (
+            <p style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: '3rem 0', fontSize: '0.9rem' }}>
+              Chargement des jeux Steam…
+            </p>
+          )}
+          {steamImportError && (
+            <div style={{
+              padding: '1rem', borderRadius: '10px',
+              background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)',
+              color: '#fca5a5', fontSize: '0.85rem',
+            }}>
+              <strong>Erreur :</strong> {steamImportError}
+              <p style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>
+                Vérifie que STEAM_API_KEY et STEAM_USER_ID (ou STEAM_VANITY_URL) sont définis dans .env.local.
+              </p>
+            </div>
+          )}
+
+          {/* Games grid */}
+          {!steamImportLoading && !steamImportError && steamOwned.length > 0 && (() => {
+            const visible = steamOwned.filter((g) =>
+              !steamSearch.trim() || g.name.toLowerCase().includes(steamSearch.toLowerCase())
+            );
+            return (
+              <>
+                <p style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.2)', marginBottom: '0.75rem' }}>
+                  {visible.length} jeux {steamSearch ? 'filtrés' : 'possédés'} · {existingSteamIds.size} déjà importés
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.5rem' }}>
+                  {visible.map((g) => {
+                    const alreadyIn = existingSteamIds.has(g.appId);
+                    const selected = steamSelected.has(g.appId);
+                    return (
+                      <button
+                        key={g.appId}
+                        onClick={() => {
+                          if (alreadyIn) return;
+                          setSteamSelected((prev) => {
+                            const n = new Set(prev);
+                            if (n.has(g.appId)) n.delete(g.appId); else n.add(g.appId);
+                            return n;
+                          });
+                        }}
+                        style={{
+                          position: 'relative', borderRadius: '8px', overflow: 'hidden',
+                          border: `2px solid ${selected ? '#7c3aed' : alreadyIn ? 'rgba(74,222,128,0.3)' : 'rgba(255,255,255,0.06)'}`,
+                          cursor: alreadyIn ? 'default' : 'pointer',
+                          opacity: alreadyIn ? 0.5 : 1,
+                          background: 'rgba(255,255,255,0.03)',
+                          textAlign: 'left', padding: 0,
+                          transition: 'border-color 0.15s, opacity 0.15s',
+                        }}
+                      >
+                        {/* Cover */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={g.headerUrl}
+                          alt={g.name}
+                          style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }}
+                          loading="lazy"
+                        />
+                        {/* Checkmark overlay */}
+                        {(selected || alreadyIn) && (
+                          <div style={{
+                            position: 'absolute', top: '4px', right: '4px',
+                            width: '18px', height: '18px', borderRadius: '50%',
+                            background: alreadyIn ? 'rgba(74,222,128,0.9)' : '#7c3aed',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '10px', color: 'white', fontWeight: 900,
+                          }}>
+                            {alreadyIn ? '✓' : '✓'}
+                          </div>
+                        )}
+                        {/* Name + hours */}
+                        <div style={{ padding: '0.4rem 0.5rem' }}>
+                          <p style={{
+                            fontSize: '0.7rem', fontWeight: 600, color: 'rgba(255,255,255,0.8)',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            lineHeight: 1.3,
+                          }}>
+                            {g.name}
+                          </p>
+                          {g.playtimeMinutes > 0 && (
+                            <p style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', marginTop: '0.1rem' }}>
+                              {Math.round(g.playtimeMinutes / 60)}h jouées
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
 
