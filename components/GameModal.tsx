@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Game } from '@/data/games';
-import { X, Star, Clock, ExternalLink, Play, ChevronLeft, ChevronRight, Share2, Check } from 'lucide-react';
+import { X, Star, Clock, ExternalLink, Play, ChevronLeft, ChevronRight, Share2, Check, Tag } from 'lucide-react';
+import type { SteamPrice } from '@/lib/steam';
 import { gameSlug } from '@/lib/utils';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -56,6 +57,7 @@ export default function GameModal({ game, onClose }: Props) {
   const [screenshots, setScreenshots] = useState<string[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [price, setPrice] = useState<SteamPrice | null>(null);
 
   function share() {
     const url = `https://weinoz.com/jeux/${gameSlug(game.title)}`;
@@ -98,6 +100,15 @@ export default function GameModal({ game, onClose }: Props) {
       .then((data: { image: string }[]) => setScreenshots(data.map(s => s.image)))
       .catch(() => {});
   }, [game.id]);
+
+  // Fetch Steam price
+  useEffect(() => {
+    if (!game.storeUrl) return;
+    fetch(`/api/price?url=${encodeURIComponent(game.storeUrl)}`)
+      .then(r => r.json())
+      .then((data: SteamPrice | null) => setPrice(data))
+      .catch(() => {});
+  }, [game.storeUrl]);
 
   const status = STATUS[game.status] ?? { label: game.status, color: '#a78bfa' };
   const ratingStars = game.rating != null ? Math.round(game.rating / 2) : 0;
@@ -307,19 +318,59 @@ export default function GameModal({ game, onClose }: Props) {
               </button>
 
             {game.storeUrl && (
-              <a
-                href={game.storeUrl} target="_blank" rel="noopener noreferrer"
-                style={{
-                  alignSelf: 'flex-start',
-                  display: 'inline-flex', alignItems: 'center', gap: '0.45rem',
-                  padding: '0.55rem 1rem', borderRadius: '8px',
-                  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                  color: 'rgba(255,255,255,0.55)', fontSize: '0.82rem', textDecoration: 'none',
-                }}
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                Voir / acheter le jeu
-              </a>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <a
+                  href={game.storeUrl} target="_blank" rel="noopener noreferrer"
+                  style={{
+                    alignSelf: 'flex-start',
+                    display: 'inline-flex', alignItems: 'center', gap: '0.45rem',
+                    padding: '0.55rem 1rem', borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'rgba(255,255,255,0.55)', fontSize: '0.82rem', textDecoration: 'none',
+                  }}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  {game.storeUrl.includes('steampowered.com') ? 'Voir sur Steam' : 'Voir / acheter le jeu'}
+                </a>
+
+                {price && (
+                  price.isFree ? (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                      padding: '0.4rem 0.75rem', borderRadius: '8px',
+                      background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)',
+                      color: '#86efac', fontSize: '0.82rem', fontWeight: 700,
+                    }}>
+                      <Tag className="w-3 h-3" /> Gratuit
+                    </span>
+                  ) : price.discount > 0 ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{
+                        padding: '0.2rem 0.5rem', borderRadius: '5px',
+                        background: '#16a34a', color: 'white',
+                        fontSize: '0.72rem', fontWeight: 800,
+                      }}>
+                        -{price.discount}%
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)', textDecoration: 'line-through' }}>
+                        {price.initialFormatted}
+                      </span>
+                      <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#86efac' }}>
+                        {price.finalFormatted}
+                      </span>
+                    </div>
+                  ) : (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
+                      padding: '0.4rem 0.75rem', borderRadius: '8px',
+                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                      color: 'rgba(255,255,255,0.65)', fontSize: '0.82rem', fontWeight: 700,
+                    }}>
+                      <Tag className="w-3 h-3" /> {price.finalFormatted}
+                    </span>
+                  )
+                )}
+              </div>
             )}
             </div>
 

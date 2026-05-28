@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getGames } from '@/lib/redis';
 import { gameSlug } from '@/lib/utils';
-import { ArrowLeft, Star, Clock, ExternalLink } from 'lucide-react';
+import { extractSteamAppId, fetchSteamPrice } from '@/lib/steam';
+import { ArrowLeft, Star, Clock, ExternalLink, Tag } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +44,10 @@ export default async function GamePage({ params }: Props) {
 
   const status = STATUS[game.status] ?? { label: game.status, color: '#a78bfa' };
   const ratingStars = game.rating != null ? Math.round(game.rating / 2) : 0;
+
+  // Fetch Steam price if the store URL is a Steam link
+  const steamAppId = game.storeUrl ? extractSteamAppId(game.storeUrl) : null;
+  const price = steamAppId ? await fetchSteamPrice(steamAppId) : null;
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--purple-ink)' }}>
@@ -140,16 +145,59 @@ export default async function GamePage({ params }: Props) {
           </div>
         )}
 
-        {/* Store link */}
+        {/* Store link + price */}
         {game.storeUrl && (
-          <a href={game.storeUrl} target="_blank" rel="noopener noreferrer" style={{
-            display: 'inline-flex', alignItems: 'center', gap: '0.45rem',
-            padding: '0.6rem 1.1rem', borderRadius: '10px', marginBottom: '1.5rem',
-            background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-            color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', textDecoration: 'none',
-          }}>
-            <ExternalLink className="w-4 h-4" /> Voir / acheter le jeu
-          </a>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+            <a href={game.storeUrl} target="_blank" rel="noopener noreferrer" style={{
+              display: 'inline-flex', alignItems: 'center', gap: '0.45rem',
+              padding: '0.6rem 1.1rem', borderRadius: '10px',
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+              color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', textDecoration: 'none',
+            }}>
+              <ExternalLink className="w-4 h-4" />
+              {steamAppId ? 'Voir sur Steam' : 'Voir / acheter le jeu'}
+            </a>
+
+            {price && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {price.isFree ? (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                    padding: '0.45rem 0.9rem', borderRadius: '10px',
+                    background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)',
+                    color: '#86efac', fontSize: '0.9rem', fontWeight: 700,
+                  }}>
+                    <Tag className="w-3.5 h-3.5" /> Gratuit
+                  </span>
+                ) : price.discount > 0 ? (
+                  <>
+                    <span style={{
+                      padding: '0.2rem 0.55rem', borderRadius: '6px',
+                      background: '#16a34a', color: 'white',
+                      fontSize: '0.78rem', fontWeight: 800,
+                    }}>
+                      -{price.discount}%
+                    </span>
+                    <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)', textDecoration: 'line-through' }}>
+                      {price.initialFormatted}
+                    </span>
+                    <span style={{ fontSize: '1rem', fontWeight: 800, color: '#86efac' }}>
+                      {price.finalFormatted}
+                    </span>
+                  </>
+                ) : (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                    padding: '0.45rem 0.9rem', borderRadius: '10px',
+                    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                    color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', fontWeight: 700,
+                  }}>
+                    <Tag className="w-3.5 h-3.5" /> {price.finalFormatted}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Linked videos */}
