@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"D:\\\\weinozwebsite\\\\components\")",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"D:\\\\weinozwebsite\\\\data\")",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"D:\\\\weinozwebsite\\\\app\\\\videos\")",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"D:\\\\weinozwebsite\\\\app\\\\jeux\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)",
+      "Bash(gh repo *)",
+      "Bash(npx tsc *)",
+      "Bash(npx next *)",
+      "Bash(git push *)",
+      "Bash(vercel env *)",
+      "Bash(npx vercel *)"
+    ]
+  }
+}

@@ -3,14 +3,15 @@
 import { useState, useMemo } from 'react';
 import GameCard from '@/components/GameCard';
 import { Game, GameStatus, GamePlatform } from '@/data/games';
-import { Star, Clock, Gamepad2, Trophy, Play, X, BookMarked } from 'lucide-react';
+import { Star, Clock, Gamepad2, Trophy, Play, X, BookMarked, Infinity } from 'lucide-react';
 
 const statusFilters: { value: 'all' | GameStatus; label: string; icon: React.ReactNode }[] = [
-  { value: 'all', label: 'Tous', icon: <Gamepad2 className="w-4 h-4" /> },
-  { value: 'terminé', label: 'Terminés', icon: <Trophy className="w-4 h-4" /> },
-  { value: 'en cours', label: 'En cours', icon: <Play className="w-4 h-4" /> },
-  { value: 'abandonné', label: 'Abandonnés', icon: <X className="w-4 h-4" /> },
-  { value: 'liste de souhaits', label: 'Wishlist', icon: <BookMarked className="w-4 h-4" /> },
+  { value: 'all',               label: 'Tous',       icon: <Gamepad2   className="w-4 h-4" /> },
+  { value: 'terminé',           label: 'Terminés',   icon: <Trophy     className="w-4 h-4" /> },
+  { value: 'en cours',          label: 'En cours',   icon: <Play       className="w-4 h-4" /> },
+  { value: 'infini',            label: 'Infinis',    icon: <Infinity   className="w-4 h-4" /> },
+  { value: 'abandonné',         label: 'Abandonnés', icon: <X          className="w-4 h-4" /> },
+  { value: 'liste de souhaits', label: 'Wishlist',   icon: <BookMarked className="w-4 h-4" /> },
 ];
 
 const platforms: GamePlatform[] = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Switch', 'Mobile'];
@@ -23,9 +24,10 @@ const sortOptions = [
 ];
 
 const statusColors: Record<string, string> = {
-  'terminé': '#22c55e',
-  'en cours': '#3b82f6',
-  'abandonné': '#ef4444',
+  'terminé':           '#22c55e',
+  'en cours':          '#3b82f6',
+  'infini':            '#06b6d4',
+  'abandonné':         '#ef4444',
   'liste de souhaits': '#eab308',
 };
 

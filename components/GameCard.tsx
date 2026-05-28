@@ -8,6 +8,7 @@ const statusConfig = {
   'en cours': { label: 'En cours', cls: 'status-playing' },
   'abandonné': { label: 'Abandonné', cls: 'status-abandoned' },
   'liste de souhaits': { label: 'Wishlist', cls: 'status-wishlist' },
+  'infini': { label: '∞ Infini', cls: 'status-infinite' },
 };
 
 const platformColors: Record<string, string> = {

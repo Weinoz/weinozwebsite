@@ -1,4 +1,4 @@
-export type GameStatus = 'terminé' | 'en cours' | 'abandonné' | 'liste de souhaits';
+export type GameStatus = 'terminé' | 'en cours' | 'abandonné' | 'liste de souhaits' | 'infini';
 export type GamePlatform = 'PC' | 'PS5' | 'PS4' | 'Xbox Series' | 'Switch' | 'Mobile';
 
 export interface Game {

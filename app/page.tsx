@@ -13,16 +13,15 @@ import { getGames } from '@/lib/redis';
 export const dynamic = 'force-dynamic';
 
 const socialPlatforms = [
-  { name: 'YouTube',   handle: '@weinoz',    href: 'https://www.youtube.com/@weinoz',        icon: YoutubeIcon,   desc: 'Vidéos gaming & vlogs' },
-  { name: 'Twitch',    handle: 'weinoz',     href: 'https://www.twitch.tv/weinoz',            icon: TwitchIcon,    desc: 'Lives gaming' },
-  { name: 'TikTok',    handle: '@weinoz',    href: 'https://www.tiktok.com/@weinoz',          icon: TikTokIcon,    desc: 'Clips & highlights' },
-  { name: 'Instagram', handle: '@weinoz_',   href: 'https://www.instagram.com/weinoz_/',      icon: InstagramIcon, desc: 'Photos & stories' },
-  { name: 'X',         handle: '@weinoz_',   href: 'https://x.com/weinoz_',                  icon: XIcon,         desc: 'Actu & pensées' },
-  { name: 'Discord',   handle: 'Rejoindre',  href: 'https://discord.gg/uBG6UDX56a',          icon: DiscordIcon,   desc: 'La communauté' },
+  { name: 'YouTube',   handle: '@weinoz',   href: 'https://www.youtube.com/@weinoz',     icon: YoutubeIcon   },
+  { name: 'Twitch',    handle: 'weinoz',    href: 'https://www.twitch.tv/weinoz',         icon: TwitchIcon    },
+  { name: 'TikTok',    handle: '@weinoz',   href: 'https://www.tiktok.com/@weinoz',       icon: TikTokIcon    },
+  { name: 'Instagram', handle: '@weinoz_',  href: 'https://www.instagram.com/weinoz_/',   icon: InstagramIcon },
+  { name: 'X',         handle: '@weinoz_',  href: 'https://x.com/weinoz_',               icon: XIcon         },
+  { name: 'Discord',   handle: 'Rejoindre', href: 'https://discord.gg/uBG6UDX56a',       icon: DiscordIcon   },
 ];
 
 export default async function HomePage() {
-  // Fetch everything in parallel
   const [youtubeVideos, twitchVideos, allGames] = await Promise.all([
     process.env.YOUTUBE_CHANNEL_ID
       ? fetchYouTubeVideos(process.env.YOUTUBE_CHANNEL_ID)
@@ -38,10 +37,13 @@ export default async function HomePage() {
     .slice(0, 3);
 
   const featuredGames = allGames
-    .filter((g) => g.status === 'terminé' || g.status === 'en cours')
+    .filter((g) => g.status === 'terminé' || g.status === 'en cours' || g.status === 'infini')
     .slice(0, 8);
 
   const completedCount = allGames.filter((g) => g.status === 'terminé').length;
+
+  // Game covers for the hero strip
+  const heroCoverGames = allGames.filter((g) => g.cover).slice(0, 6);
 
   return (
     <>
@@ -49,26 +51,31 @@ export default async function HomePage() {
       <section
         style={{
           background: 'linear-gradient(135deg, #B318F5 0%, #8B0EE8 35%, #6B0DD4 62%, #7B1BF0 85%, #9B12E8 100%)',
-          minHeight: '95vh',
+          minHeight: '90vh',
           position: 'relative',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'flex-end',
-          padding: '0 0 5rem',
+          justifyContent: 'space-between',
+          padding: '5rem 0 4rem',
         }}
       >
-        <div
-          style={{
-            position: 'absolute', inset: 0,
-            background: 'radial-gradient(ellipse at 20% 40%, rgba(255,255,255,0.07) 0%, transparent 60%)',
-            pointerEvents: 'none',
-          }}
-        />
+        {/* Light glare */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'radial-gradient(ellipse at 20% 40%, rgba(255,255,255,0.08) 0%, transparent 60%)',
+          pointerEvents: 'none',
+        }} />
+
+        {/* Top: tagline */}
         <div className="max-w-7xl mx-auto px-5 sm:px-8 w-full">
-          <p className="section-label mb-6 anim-fade-in" style={{ color: 'rgba(255,255,255,0.5)', animationDelay: '0s' }}>
+          <p className="section-label anim-fade-in" style={{ color: 'rgba(255,255,255,0.5)' }}>
             gaming &amp; bonne humeur 🧦
           </p>
+        </div>
+
+        {/* Center: big title */}
+        <div className="max-w-7xl mx-auto px-5 sm:px-8 w-full">
           <h1
             className="anim-fade-up"
             style={{
@@ -79,30 +86,69 @@ export default async function HomePage() {
           >
             WEINOZ
           </h1>
-          <div
-            className="flex flex-col sm:flex-row sm:items-end justify-between gap-8 mt-8 anim-fade-up"
-            style={{ animationDelay: '0.2s', opacity: 0 }}
+          <p
+            className="anim-fade-up"
+            style={{
+              color: 'rgba(255,255,255,0.55)', maxWidth: '26rem',
+              lineHeight: 1.6, marginTop: '1.5rem',
+              animationDelay: '0.16s', opacity: 0,
+            }}
           >
-            <p style={{ color: 'rgba(255,255,255,0.55)', maxWidth: '22rem', lineHeight: 1.6 }}>
-              Viens te détendre. Mets tes pantoufles et poses-toi.
-            </p>
-            <div className="flex gap-3">
-              <Link href="/videos" style={{
-                background: 'white', color: '#7B0DE8', fontWeight: 700, fontSize: '0.85rem',
-                padding: '0.6rem 1.4rem', borderRadius: '100px',
-                display: 'inline-flex', alignItems: 'center', gap: '0.4rem', transition: 'opacity 0.2s',
-              }}>
-                Mes vidéos <ArrowRight className="w-4 h-4" />
-              </Link>
-              <Link href="/jeux" style={{
-                background: 'rgba(255,255,255,0.12)', color: 'white', fontWeight: 600, fontSize: '0.85rem',
-                padding: '0.6rem 1.4rem', borderRadius: '100px', border: '1px solid rgba(255,255,255,0.2)',
-                display: 'inline-flex', alignItems: 'center', gap: '0.4rem', transition: 'background 0.2s',
-              }}>
-                <Gamepad2 className="w-4 h-4" /> Jeux
-              </Link>
-            </div>
+            Viens te détendre. Mets tes pantoufles et poses-toi.
+          </p>
+        </div>
+
+        {/* Bottom: CTA + game cover strip */}
+        <div className="max-w-7xl mx-auto px-5 sm:px-8 w-full anim-fade-up" style={{ animationDelay: '0.24s', opacity: 0 }}>
+          {/* Buttons */}
+          <div className="flex gap-3 mb-6">
+            <Link href="/videos" style={{
+              background: 'white', color: '#7B0DE8', fontWeight: 700, fontSize: '0.85rem',
+              padding: '0.6rem 1.4rem', borderRadius: '100px',
+              display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+            }}>
+              Mes vidéos <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link href="/jeux" style={{
+              background: 'rgba(255,255,255,0.12)', color: 'white', fontWeight: 600, fontSize: '0.85rem',
+              padding: '0.6rem 1.4rem', borderRadius: '100px', border: '1px solid rgba(255,255,255,0.2)',
+              display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+            }}>
+              <Gamepad2 className="w-4 h-4" /> Jeux
+            </Link>
           </div>
+
+          {/* Game covers strip — only if covers exist */}
+          {heroCoverGames.length > 0 && (
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+              {heroCoverGames.map((g) => (
+                <div
+                  key={g.id}
+                  title={g.title}
+                  style={{
+                    width: '70px', height: '52px', borderRadius: '6px', overflow: 'hidden',
+                    flexShrink: 0, opacity: 0.7,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                    transition: 'opacity 0.2s, transform 0.2s',
+                  }}
+                  className="hover:opacity-100"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={g.cover!} alt={g.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+              ))}
+              <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', marginLeft: '0.5rem', marginBottom: '0.2rem', whiteSpace: 'nowrap' }}>
+                {allGames.length} jeux · {completedCount} terminés
+              </span>
+            </div>
+          )}
+
+          {/* Fallback stats when no covers yet */}
+          {heroCoverGames.length === 0 && allGames.length > 0 && (
+            <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)' }}>
+              {allGames.length} jeux · {completedCount} terminés · {featuredVideos.length} vidéos récentes
+            </p>
+          )}
         </div>
       </section>
 

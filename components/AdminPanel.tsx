@@ -10,6 +10,7 @@ const PLATFORMS: GamePlatform[] = ['PC', 'PS5', 'PS4', 'Xbox Series', 'Switch', 
 const STATUSES: { value: GameStatus; label: string; color: string }[] = [
   { value: 'terminé',           label: 'Terminé',   color: '#22c55e' },
   { value: 'en cours',          label: 'En cours',  color: '#6366f1' },
+  { value: 'infini',            label: '∞ Infini',  color: '#06b6d4' },
   { value: 'abandonné',         label: 'Abandonné', color: '#ef4444' },
   { value: 'liste de souhaits', label: 'Wishlist',  color: '#eab308' },
 ];
