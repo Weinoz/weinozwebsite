@@ -8,6 +8,25 @@ export interface RawgGame {
   metacritic: number | null;
 }
 
+export interface RawgGameDetail extends RawgGame {
+  website: string | null;
+  stores: Array<{ url: string; store: { name: string; slug: string } }> | null;
+}
+
+export async function getGameDetails(id: number): Promise<RawgGameDetail | null> {
+  const key = process.env.RAWG_API_KEY;
+  if (!key) return null;
+  try {
+    const res = await fetch(`https://api.rawg.io/api/games/${id}?key=${key}`, {
+      next: { revalidate: 86400 },
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function searchRawg(query: string): Promise<RawgGame[]> {
   const key = process.env.RAWG_API_KEY;
   if (!key || !query.trim()) return [];

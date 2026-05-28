@@ -1,7 +1,7 @@
 'use client';
 
 import { Game } from '@/data/games';
-import { Clock, Star, Gamepad2 } from 'lucide-react';
+import { Clock, Star, Gamepad2, ExternalLink } from 'lucide-react';
 
 const statusConfig = {
   'terminé': { label: 'Terminé', cls: 'status-completed' },
@@ -148,6 +148,30 @@ export default function GameCard({ game }: Props) {
           >
             &ldquo;{game.comment}&rdquo;
           </p>
+        )}
+
+        {/* Store link */}
+        {game.storeUrl && (
+          <a
+            href={game.storeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.3rem',
+              marginTop: '0.4rem',
+              fontSize: '0.65rem',
+              fontWeight: 600,
+              color: 'rgba(160,32,240,0.7)',
+              textDecoration: 'none',
+              letterSpacing: '0.03em',
+            }}
+          >
+            <ExternalLink style={{ width: '0.6rem', height: '0.6rem' }} />
+            Acheter / voir le jeu
+          </a>
         )}
       </div>
     </div>

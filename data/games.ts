@@ -12,6 +12,7 @@ export interface Game {
   hours?: number;
   year?: number;
   genre?: string;
+  storeUrl?: string;
 }
 
 // ─── REMPLACE / COMPLÈTE AVEC TES VRAIS JEUX ────────────────────────────────
