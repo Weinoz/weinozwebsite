@@ -11,6 +11,7 @@ const navLinks = [
   { href: '/',           label: 'Accueil'    },
   { href: '/videos',     label: 'Vidéos'     },
   { href: '/jeux',       label: 'Jeux'       },
+  { href: '/stats',      label: 'Stats'      },
   { href: '/tier-list',  label: 'Tier List'  },
   { href: '/a-propos',   label: 'À propos'   },
 ];
