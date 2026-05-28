@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { getGames } from '@/lib/redis';
 import { Game, GameStatus } from '@/data/games';
 import { ArrowLeft, Download } from 'lucide-react';
@@ -71,6 +72,10 @@ function HBar({ label, count, total, color, bg }: {
 // ── page ──────────────────────────────────────────────────────────────────────
 
 export default async function StatsPage() {
+  const jar = await cookies();
+  const session = jar.get('weinoz_admin');
+  const isAdmin = !!(process.env.ADMIN_PASSWORD && session?.value === process.env.ADMIN_PASSWORD);
+
   const games: Game[] = await getGames();
   const n = games.length;
 
@@ -136,22 +141,23 @@ export default async function StatsPage() {
           <h1 className="text-4xl font-black gradient-text mb-1">Stats</h1>
           <p className="text-purple-300/40 text-sm">{n} jeux répertoriés</p>
         </div>
-        <a
-          href="/api/export/games"
-          download="jeux.json"
-          style={{
-            display: 'flex', alignItems: 'center', gap: '0.5rem',
-            padding: '0.55rem 1.1rem', borderRadius: '100px',
-            background: 'rgba(168,85,247,0.1)',
-            border: '1px solid rgba(168,85,247,0.25)',
-            color: '#c084fc', fontSize: '0.8rem', fontWeight: 600,
-            textDecoration: 'none', whiteSpace: 'nowrap',
-            transition: 'background 0.2s',
-          }}
-          title="Télécharger mes jeux au format JSON"
-        >
-          <Download className="w-3.5 h-3.5" /> Export JSON
-        </a>
+        {isAdmin && (
+          <a
+            href="/api/export/games"
+            download="jeux.json"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.5rem',
+              padding: '0.55rem 1.1rem', borderRadius: '100px',
+              background: 'rgba(168,85,247,0.1)',
+              border: '1px solid rgba(168,85,247,0.25)',
+              color: '#c084fc', fontSize: '0.8rem', fontWeight: 600,
+              textDecoration: 'none', whiteSpace: 'nowrap',
+            }}
+            title="Télécharger mes jeux au format JSON"
+          >
+            <Download className="w-3.5 h-3.5" /> Export JSON
+          </a>
+        )}
       </div>
 
       {/* Big numbers */}
