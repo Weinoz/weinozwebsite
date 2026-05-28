@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Play } from 'lucide-react';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -17,6 +17,39 @@ function getTwitchVideoId(url: string): string | null {
   return m?.[1] ?? null;
 }
 
+// ── shared overlay ────────────────────────────────────────────────────────────
+
+function PlayOverlay({ color }: { color: string }) {
+  return (
+    <div style={{
+      position: 'absolute', inset: 0,
+      background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 55%)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <div style={{
+        width: '54px', height: '54px', borderRadius: '50%',
+        background: color,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.45)',
+      }}>
+        <Play style={{ color: 'white', width: '22px', height: '22px', marginLeft: '3px' }} />
+      </div>
+    </div>
+  );
+}
+
+function PlatformBadge({ label, color }: { label: string; color: string }) {
+  return (
+    <span style={{
+      position: 'absolute', bottom: '0.55rem', left: '0.6rem',
+      background: 'rgba(0,0,0,0.72)', borderRadius: '4px',
+      padding: '0.1rem 0.45rem', fontSize: '0.62rem', fontWeight: 700, color,
+    }}>
+      {label}
+    </span>
+  );
+}
+
 // ── component ─────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -27,8 +60,8 @@ interface Props {
 export default function LinkedVideoCard({ url, index }: Props) {
   const [expanded, setExpanded] = useState(false);
 
-  const ytId      = getYouTubeId(url);
-  const twitchId  = getTwitchVideoId(url);
+  const ytId     = getYouTubeId(url);
+  const twitchId = getTwitchVideoId(url);
 
   // ── YouTube ──────────────────────────────────────────────────────────────
   if (ytId) {
@@ -60,92 +93,15 @@ export default function LinkedVideoCard({ url, index }: Props) {
           alt={`Vidéo YouTube ${index + 1}`}
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: 0.85 }}
         />
-        {/* Overlay */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 60%)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <div style={{
-            width: '54px', height: '54px', borderRadius: '50%',
-            background: 'rgba(220,0,0,0.92)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-            transition: 'transform 0.15s',
-          }}>
-            <Play style={{ color: 'white', width: '22px', height: '22px', marginLeft: '3px' }} />
-          </div>
-        </div>
-        {/* Platform badge */}
-        <span style={{
-          position: 'absolute', bottom: '0.55rem', left: '0.6rem',
-          background: 'rgba(0,0,0,0.72)', borderRadius: '4px',
-          padding: '0.1rem 0.45rem', fontSize: '0.62rem', fontWeight: 700, color: '#ff6b6b',
-        }}>
-          YouTube
-        </span>
+        <PlayOverlay color="rgba(220,0,0,0.92)" />
+        <PlatformBadge label="YouTube" color="#ff6b6b" />
       </button>
     );
   }
 
   // ── Twitch VOD ────────────────────────────────────────────────────────────
   if (twitchId) {
-    if (expanded) {
-      // parent must match the hostname serving the page
-      const parent =
-        typeof window !== 'undefined' ? window.location.hostname : 'weinoz.com';
-      return (
-        <div style={{ borderRadius: '12px', overflow: 'hidden', aspectRatio: '16/9' }}>
-          <iframe
-            src={`https://player.twitch.tv/?video=${twitchId}&parent=${parent}&autoplay=true`}
-            title={`VOD Twitch ${index + 1}`}
-            allowFullScreen
-            style={{ width: '100%', height: '100%', border: 'none' }}
-          />
-        </div>
-      );
-    }
-    return (
-      <button
-        onClick={() => setExpanded(true)}
-        title="Regarder le VOD Twitch"
-        style={{
-          position: 'relative', borderRadius: '12px', overflow: 'hidden',
-          aspectRatio: '16/9', display: 'block', width: '100%',
-          cursor: 'pointer', border: 'none', padding: 0,
-          background: 'linear-gradient(135deg, #1a0533 0%, #2d0b66 100%)',
-        }}
-      >
-        {/* Subtle grid background */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          backgroundImage: 'radial-gradient(rgba(160,32,240,0.12) 1px, transparent 1px)',
-          backgroundSize: '24px 24px',
-        }} />
-        {/* Play button */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-          <div style={{
-            width: '54px', height: '54px', borderRadius: '50%',
-            background: 'rgba(145,70,255,0.85)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 20px rgba(145,70,255,0.4)',
-          }}>
-            <Play style={{ color: 'white', width: '22px', height: '22px', marginLeft: '3px' }} />
-          </div>
-        </div>
-        {/* Platform badge */}
-        <span style={{
-          position: 'absolute', bottom: '0.55rem', left: '0.6rem',
-          background: 'rgba(0,0,0,0.7)', borderRadius: '4px',
-          padding: '0.1rem 0.45rem', fontSize: '0.62rem', fontWeight: 700, color: '#c084fc',
-        }}>
-          Twitch VOD
-        </span>
-      </button>
-    );
+    return <TwitchVodCard twitchId={twitchId} index={index} url={url} />;
   }
 
   // ── Generic fallback ──────────────────────────────────────────────────────
@@ -163,5 +119,92 @@ export default function LinkedVideoCard({ url, index }: Props) {
     >
       <Play style={{ width: '1rem', height: '1rem', flexShrink: 0 }} /> Voir la vidéo
     </a>
+  );
+}
+
+// ── Twitch sub-component (needs useEffect for thumbnail fetch) ────────────────
+
+function TwitchVodCard({ twitchId, index, url }: { twitchId: string; index: number; url: string }) {
+  const [expanded, setExpanded]     = useState(false);
+  const [thumbnail, setThumbnail]   = useState<string | null>(null);
+  const [thumbLoaded, setThumbLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/twitch/vod/${twitchId}`)
+      .then((r) => r.json())
+      .then((d) => { if (d?.thumbnail) setThumbnail(d.thumbnail); })
+      .catch(() => {/* no-op — placeholder stays */});
+  }, [twitchId]);
+
+  if (expanded) {
+    const parent = typeof window !== 'undefined' ? window.location.hostname : 'weinoz.com';
+    return (
+      <div style={{ borderRadius: '12px', overflow: 'hidden', aspectRatio: '16/9' }}>
+        <iframe
+          src={`https://player.twitch.tv/?video=${twitchId}&parent=${parent}&autoplay=true`}
+          title={`VOD Twitch ${index + 1}`}
+          allowFullScreen
+          style={{ width: '100%', height: '100%', border: 'none' }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setExpanded(true)}
+      title="Regarder le VOD Twitch"
+      style={{
+        position: 'relative', borderRadius: '12px', overflow: 'hidden',
+        aspectRatio: '16/9', display: 'block', width: '100%',
+        cursor: 'pointer', border: 'none', padding: 0,
+        // Show placeholder gradient until thumbnail loads
+        background: 'linear-gradient(135deg, #1a0533 0%, #2d0b66 100%)',
+      }}
+    >
+      {/* Real thumbnail — fades in once loaded */}
+      {thumbnail && (
+        <img
+          src={thumbnail}
+          alt={`VOD Twitch ${index + 1}`}
+          onLoad={() => setThumbLoaded(true)}
+          style={{
+            position: 'absolute', inset: 0,
+            width: '100%', height: '100%', objectFit: 'cover',
+            opacity: thumbLoaded ? 0.85 : 0,
+            transition: 'opacity 0.3s ease',
+          }}
+        />
+      )}
+
+      {/* Placeholder grid (visible until thumbnail loads) */}
+      {!thumbLoaded && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          backgroundImage: 'radial-gradient(rgba(160,32,240,0.12) 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
+        }} />
+      )}
+
+      <PlayOverlay color="rgba(145,70,255,0.88)" />
+      <PlatformBadge label="Twitch VOD" color="#c084fc" />
+
+      {/* External link — opens in new tab without expanding */}
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        title="Ouvrir sur Twitch"
+        style={{
+          position: 'absolute', top: '0.5rem', right: '0.5rem',
+          background: 'rgba(0,0,0,0.6)', borderRadius: '4px',
+          padding: '0.2rem 0.4rem', fontSize: '0.6rem', fontWeight: 700,
+          color: 'rgba(255,255,255,0.6)', textDecoration: 'none',
+        }}
+      >
+        ↗
+      </a>
+    </button>
   );
 }
