@@ -131,6 +131,14 @@ export default async function StatsPage() {
     .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
     .slice(0, 5);
 
+  // ── records ──
+  const mostHours   = [...games].sort((a, b) => (b.hours ?? 0) - (a.hours ?? 0))[0];
+  const lowestRated = [...ratedGames].sort((a, b) => (a.rating ?? 0) - (b.rating ?? 0))[0];
+  const newestGame  = [...games].filter(g => g.year).sort((a, b) => (b.year ?? 0) - (a.year ?? 0))[0];
+  const oldestGame  = [...games].filter(g => g.year).sort((a, b) => (a.year ?? 9999) - (b.year ?? 9999))[0];
+  const platineCount = games.filter(g => g.completion === 'platine').length;
+  const completedPct = games.filter(g => g.status === 'terminé').length;
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-16">
 
@@ -338,6 +346,36 @@ export default async function StatsPage() {
           </section>
         )}
       </div>
+
+      {/* Records */}
+      <section className="mb-4">
+        <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'rgba(255,255,255,0.7)', marginBottom: '1rem' }}>
+          Records &amp; anecdotes
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
+          {([
+            mostHours?.hours   ? { emoji: '⏱', label: 'Plus long',           value: `${mostHours.hours}h`,           sub: mostHours.title } : null,
+            top5[0]?.rating    ? { emoji: '⭐', label: 'Meilleure note',       value: `${top5[0].rating}/10`,          sub: top5[0].title }   : null,
+            lowestRated?.rating && ratedGames.length > 1 ? { emoji: '😬', label: 'Note la plus basse', value: `${lowestRated.rating}/10`, sub: lowestRated.title } : null,
+            newestGame         ? { emoji: '🆕', label: 'Le plus récent',       value: String(newestGame.year),         sub: newestGame.title } : null,
+            oldestGame && oldestGame.id !== newestGame?.id ? { emoji: '📼', label: 'Le plus vieux', value: String(oldestGame.year), sub: oldestGame.title } : null,
+            platineCount > 0   ? { emoji: '♦',  label: 'Platines',            value: String(platineCount),            sub: 'trophées platine' } : null,
+            n > 0              ? { emoji: '🏁', label: 'Taux de completion',   value: `${Math.round((completedPct / n) * 100)}%`, sub: `${completedPct} / ${n} terminés` } : null,
+          ] as const).filter(Boolean).map((r) => (
+            <div key={r!.label} style={{
+              padding: '0.9rem 1rem', borderRadius: '12px',
+              background: 'rgba(168,85,247,0.05)', border: '1px solid rgba(168,85,247,0.12)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                <span style={{ fontSize: '1.1rem' }}>{r!.emoji}</span>
+                <span style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)' }}>{r!.label}</span>
+              </div>
+              <p style={{ fontSize: '1.2rem', fontWeight: 900, color: 'white', lineHeight: 1 }}>{r!.value}</p>
+              <p style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.35)', marginTop: '0.2rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r!.sub}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
     </div>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useTransition } from 'react';
-import { Game, GameStatus, GamePlatform, GameTier } from '@/data/games';
+import { Game, GameStatus, GamePlatform, GameTier, GameCompletion } from '@/data/games';
 import { RawgGame } from '@/lib/rawg';
 import { SiteConfig } from '@/lib/redis';
 import { SteamSearchHit, SteamGameInfo } from '@/lib/steam';
@@ -73,6 +73,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   const [platforms, setPlatforms] = useState<GamePlatform[]>(['PC']);
   const [status, setStatus] = useState<GameStatus>('terminé');
   const [tier, setTier] = useState<GameTier | undefined>(undefined);
+  const [completion, setCompletion] = useState<GameCompletion | undefined>(undefined);
   const [rating, setRating] = useState('');
   const [hours, setHours] = useState('');
   const [comment, setComment] = useState('');
@@ -165,7 +166,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
   }
 
   function resetForm() {
-    setPlatforms(['PC']); setStatus('terminé'); setTier(undefined);
+    setPlatforms(['PC']); setStatus('terminé'); setTier(undefined); setCompletion(undefined);
     setRating(''); setHours(''); setComment(''); setStoreUrl('');
     setLinkedVideos([]); setVideoInput('');
     setManualTitle(''); setManualCover(''); setCoverUrlOverride('');
@@ -218,7 +219,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
 
   function openEditPanel(g: Game) {
     setEditingGame(g); setSelectedRawg(null);
-    setPlatforms(g.platforms ?? ['PC']); setStatus(g.status); setTier(g.tier);
+    setPlatforms(g.platforms ?? ['PC']); setStatus(g.status); setTier(g.tier); setCompletion(g.completion);
     setRating(g.rating?.toString() ?? '');
     setHours(g.hours?.toString() ?? '');
     setComment(g.comment ?? '');
@@ -236,7 +237,7 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
     if (panelMode === 'manual' && !manualTitle.trim()) return;
 
     const sharedFields = {
-      platforms, status, tier,
+      platforms, status, tier, completion,
       rating: rating ? parseFloat(rating) : undefined,
       hours: hours ? parseInt(hours) : undefined,
       comment: comment.trim() || undefined,
@@ -1495,6 +1496,27 @@ export default function AdminPanel({ initialGames, initialTopIds, initialConfig 
                   ))}
                 </div>
               </div>
+
+              {/* Completion (only when terminé) */}
+              {status === 'terminé' && (
+                <div>
+                  <label className="section-label" style={{ display: 'block', marginBottom: '0.4rem' }}>Complétion (optionnel)</label>
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                    {([undefined, '100%', 'platine'] as (GameCompletion | undefined)[]).map((v) => (
+                      <button key={String(v)} onClick={() => setCompletion(v === completion ? undefined : v)} style={{
+                        padding: '0.3rem 0.8rem', borderRadius: '100px', fontSize: '0.78rem', fontWeight: 600,
+                        border: '1px solid',
+                        background: completion === v && v !== undefined ? (v === 'platine' ? 'rgba(192,192,255,0.12)' : 'rgba(255,215,0,0.1)') : 'transparent',
+                        borderColor: completion === v && v !== undefined ? (v === 'platine' ? 'rgba(192,192,255,0.35)' : 'rgba(255,215,0,0.35)') : 'rgba(255,255,255,0.1)',
+                        color: completion === v && v !== undefined ? (v === 'platine' ? '#c8c8ff' : '#FFD700') : 'rgba(255,255,255,0.35)',
+                        cursor: 'pointer',
+                      }}>
+                        {v === undefined ? '— Normal' : v === 'platine' ? '♦ Platine' : '✓ 100%'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Tier */}
               <div>

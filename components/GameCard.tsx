@@ -82,6 +82,19 @@ export default function GameCard({ game, onClick }: Props) {
         >
           {status.label}
         </span>
+        {/* Completion badge */}
+        {game.completion && (
+          <span style={{
+            position: 'absolute', top: '0.5rem', right: '0.5rem',
+            fontSize: '0.58rem', fontWeight: 800, letterSpacing: '0.04em',
+            padding: '0.15rem 0.4rem', borderRadius: '4px',
+            background: game.completion === 'platine' ? 'rgba(192,192,255,0.18)' : 'rgba(255,215,0,0.18)',
+            color: game.completion === 'platine' ? '#e0e0ff' : '#FFD700',
+            border: `1px solid ${game.completion === 'platine' ? 'rgba(192,192,255,0.35)' : 'rgba(255,215,0,0.35)'}`,
+          }}>
+            {game.completion === 'platine' ? '♦ Platine' : '✓ 100%'}
+          </span>
+        )}
       </div>
 
       {/* Info */}

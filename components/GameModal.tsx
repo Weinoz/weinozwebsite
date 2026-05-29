@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Game } from '@/data/games';
+import { Game, GameCompletion } from '@/data/games';
 import { X, Star, Clock, ExternalLink, ChevronLeft, ChevronRight, Share2, Check, Tag } from 'lucide-react';
 import LinkedVideoCard from '@/components/LinkedVideoCard';
 import type { SteamPrice } from '@/lib/steam';
@@ -35,9 +35,10 @@ const STATUS: Record<string, { label: string; color: string }> = {
 interface Props {
   game: Game;
   onClose: () => void;
+  allGames?: Game[]; // for "jeux similaires"
 }
 
-export default function GameModal({ game, onClose }: Props) {
+export default function GameModal({ game, onClose, allGames = [] }: Props) {
   const [screenshots, setScreenshots] = useState<string[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -96,6 +97,12 @@ export default function GameModal({ game, onClose }: Props) {
 
   const status = STATUS[game.status] ?? { label: game.status, color: '#a78bfa' };
   const ratingStars = game.rating != null ? Math.round(game.rating / 2) : 0;
+
+  // Jeux similaires: same genre, not this game, has a cover, sorted by rating
+  const similarGames = allGames
+    .filter((g) => g.id !== game.id && g.genre && g.genre === game.genre && g.cover)
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+    .slice(0, 4);
 
   return (
     <>
@@ -225,6 +232,16 @@ export default function GameModal({ game, onClose }: Props) {
                 }}>
                   {game.platforms.join(' · ')}
                 </span>
+                {game.completion && (
+                  <span style={{
+                    padding: '0.25rem 0.8rem', borderRadius: '100px', fontSize: '0.72rem', fontWeight: 700,
+                    background: game.completion === 'platine' ? 'rgba(192,192,255,0.12)' : 'rgba(255,215,0,0.1)',
+                    color: game.completion === 'platine' ? '#c8c8ff' : '#FFD700',
+                    border: `1px solid ${game.completion === 'platine' ? 'rgba(192,192,255,0.3)' : 'rgba(255,215,0,0.3)'}`,
+                  }}>
+                    {game.completion === 'platine' ? '♦ Platine' : '✓ 100%'}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -357,6 +374,38 @@ export default function GameModal({ game, onClose }: Props) {
               </div>
             )}
             </div>
+
+            {/* Jeux similaires */}
+            {similarGames.length > 0 && (
+              <div>
+                <p style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, marginBottom: '0.75rem' }}>
+                  Dans le même genre · {game.genre}
+                </p>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {similarGames.map((g) => (
+                    <button key={g.id} onClick={() => { onClose(); setTimeout(() => { /* navigate to slug */ }, 50); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '0.5rem',
+                        padding: '0.35rem 0.6rem 0.35rem 0.35rem', borderRadius: '8px',
+                        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+                        cursor: 'pointer', textDecoration: 'none',
+                        transition: 'border-color 0.15s',
+                      }}
+                      title={g.title}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={g.cover!} alt="" style={{ width: '28px', height: '20px', objectFit: 'cover', borderRadius: '3px', flexShrink: 0 }} />
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'rgba(255,255,255,0.65)', whiteSpace: 'nowrap', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {g.title}
+                      </span>
+                      {g.rating != null && (
+                        <span style={{ fontSize: '0.65rem', color: '#facc15', fontWeight: 700, flexShrink: 0 }}>★ {g.rating}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Linked videos */}
             {game.linkedVideos && game.linkedVideos.length > 0 && (

@@ -4,7 +4,8 @@ import { useState, useMemo } from 'react';
 import GameCard from '@/components/GameCard';
 import GameModal from '@/components/GameModal';
 import { Game, GameStatus, GamePlatform, GameTier } from '@/data/games';
-import { Star, Clock, Gamepad2, Trophy, Play, X, BookMarked, Infinity, Search, FilterX, LayoutGrid, CalendarDays } from 'lucide-react';
+import { Star, Clock, Gamepad2, Trophy, Play, X, BookMarked, Infinity, Search, FilterX, LayoutGrid, CalendarDays, List, ImageOff } from 'lucide-react';
+import { addGameAction } from '@/app/admin/actions';
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -52,9 +53,9 @@ function normalize(s: string) {
 
 // ── component ─────────────────────────────────────────────────────────────────
 
-interface Props { initialGames: Game[] }
+interface Props { initialGames: Game[]; isAdmin?: boolean }
 
-export default function JeuxClient({ initialGames }: Props) {
+export default function JeuxClient({ initialGames, isAdmin = false }: Props) {
   const [search,          setSearch]          = useState('');
   const [activeStatus,    setActiveStatus]    = useState<'all' | GameStatus>('all');
   const [activePlatform,  setActivePlatform]  = useState<'all' | GamePlatform>('all');
@@ -62,7 +63,8 @@ export default function JeuxClient({ initialGames }: Props) {
   const [activeGenre,     setActiveGenre]     = useState('all');
   const [sortBy,          setSortBy]          = useState('rating-desc');
   const [selectedGame,    setSelectedGame]    = useState<Game | null>(null);
-  const [view,            setView]            = useState<'grid' | 'timeline'>('grid');
+  const [view,            setView]            = useState<'grid' | 'timeline' | 'compact'>('grid');
+  const [quickEdit,       setQuickEdit]       = useState<{ id: string; field: 'status' | 'rating' } | null>(null);
 
   // Unique genres sorted alphabetically
   const genres = useMemo(() => {
@@ -318,11 +320,15 @@ export default function JeuxClient({ initialGames }: Props) {
 
           {/* View toggle */}
           <div className="flex ml-auto glass rounded-full p-0.5 gap-0.5">
-            {([['grid', <LayoutGrid key="g" className="w-3.5 h-3.5" />], ['timeline', <CalendarDays key="t" className="w-3.5 h-3.5" />]] as const).map(([v, icon]) => (
+            {([
+              ['grid',     <LayoutGrid  key="g" className="w-3.5 h-3.5" />, 'Vue grille'   ],
+              ['timeline', <CalendarDays key="t" className="w-3.5 h-3.5" />, 'Vue timeline' ],
+              ['compact',  <List        key="c" className="w-3.5 h-3.5" />, 'Vue compacte' ],
+            ] as const).map(([v, icon, title]) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
-                title={v === 'grid' ? 'Vue grille' : 'Vue timeline'}
+                title={title}
                 className="p-1.5 rounded-full transition-all"
                 style={{
                   background: view === v ? 'rgba(168,85,247,0.25)' : 'transparent',
@@ -351,7 +357,19 @@ export default function JeuxClient({ initialGames }: Props) {
       {filtered.length > 0 && view === 'grid' && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filtered.map((g) => (
-            <GameCard key={g.id} game={g} onClick={() => setSelectedGame(g)} />
+            <div key={g.id} style={{ position: 'relative' }}>
+              <GameCard game={g} onClick={() => setSelectedGame(g)} />
+              {isAdmin && !g.cover && (
+                <span title="Pas de cover" style={{
+                  position: 'absolute', top: '0.4rem', left: '0.4rem', zIndex: 2,
+                  background: 'rgba(239,68,68,0.85)', borderRadius: '4px',
+                  padding: '0.1rem 0.35rem', fontSize: '0.55rem', fontWeight: 700, color: 'white',
+                  display: 'flex', alignItems: 'center', gap: '0.2rem',
+                }}>
+                  <ImageOff style={{ width: '10px', height: '10px' }} /> No cover
+                </span>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -361,29 +379,32 @@ export default function JeuxClient({ initialGames }: Props) {
         <div className="flex flex-col gap-10">
           {timelineGroups.map(([year, games]) => (
             <section key={year}>
-              {/* Year header */}
               <div className="flex items-center gap-4 mb-5">
                 <span style={{
-                  fontSize: 'clamp(1.8rem, 4vw, 2.8rem)',
-                  fontWeight: 900,
-                  lineHeight: 1,
+                  fontSize: 'clamp(1.8rem, 4vw, 2.8rem)', fontWeight: 900, lineHeight: 1,
                   background: 'linear-gradient(135deg, #D06EFF 0%, #7B6FFF 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                  flexShrink: 0,
+                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', flexShrink: 0,
                 }}>
                   {year === 0 ? '—' : year}
                 </span>
                 <div style={{ flex: 1, height: '1px', background: 'linear-gradient(90deg, rgba(168,85,247,0.35) 0%, transparent 100%)' }} />
-                <span className="text-xs text-purple-300/30 font-semibold">
-                  {games.length} jeu{games.length > 1 ? 'x' : ''}
-                </span>
+                <span className="text-xs text-purple-300/30 font-semibold">{games.length} jeu{games.length > 1 ? 'x' : ''}</span>
               </div>
-              {/* Games in that year */}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {games.map((g) => (
-                  <GameCard key={g.id} game={g} onClick={() => setSelectedGame(g)} />
+                  <div key={g.id} style={{ position: 'relative' }}>
+                    <GameCard game={g} onClick={() => setSelectedGame(g)} />
+                    {isAdmin && !g.cover && (
+                      <span style={{
+                        position: 'absolute', top: '0.4rem', left: '0.4rem', zIndex: 2,
+                        background: 'rgba(239,68,68,0.85)', borderRadius: '4px',
+                        padding: '0.1rem 0.35rem', fontSize: '0.55rem', fontWeight: 700, color: 'white',
+                        display: 'flex', alignItems: 'center', gap: '0.2rem',
+                      }}>
+                        <ImageOff style={{ width: '10px', height: '10px' }} /> No cover
+                      </span>
+                    )}
+                  </div>
                 ))}
               </div>
             </section>
@@ -391,8 +412,79 @@ export default function JeuxClient({ initialGames }: Props) {
         </div>
       )}
 
+      {/* Compact / table view */}
+      {filtered.length > 0 && view === 'compact' && (
+        <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.06)' }}>
+          {/* Header */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 80px 60px 60px',
+            padding: '0.5rem 1rem', gap: '0.5rem',
+            background: 'rgba(255,255,255,0.04)',
+            fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.08em',
+            color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase',
+          }}>
+            <span>Titre</span>
+            <span>Statut</span>
+            <span>Plateforme</span>
+            <span style={{ textAlign: 'center' }}>Note</span>
+            <span style={{ textAlign: 'center' }}>Heures</span>
+            <span style={{ textAlign: 'center' }}>Tier</span>
+          </div>
+          {filtered.map((g, i) => {
+            const isEven = i % 2 === 0;
+            const statusColors: Record<string, string> = {
+              'terminé': '#4ade80', 'en cours': '#60a5fa', 'infini': '#22d3ee',
+              'abandonné': '#f87171', 'liste de souhaits': '#facc15',
+            };
+            const tierColors: Record<string, string> = { S: '#FF4444', A: '#FF8C00', B: '#FFD700', C: '#22c55e', D: '#818cf8' };
+            return (
+              <button
+                key={g.id}
+                onClick={() => setSelectedGame(g)}
+                style={{
+                  display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 80px 60px 60px',
+                  width: '100%', padding: '0.55rem 1rem', gap: '0.5rem', alignItems: 'center',
+                  background: isEven ? 'rgba(255,255,255,0.015)' : 'transparent',
+                  border: 'none', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                  cursor: 'pointer', textAlign: 'left', transition: 'background 0.15s',
+                }}
+                className="hover:bg-purple-900/10"
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+                  {g.cover && <img src={g.cover} alt="" style={{ width: '28px', height: '20px', objectFit: 'cover', borderRadius: '3px', flexShrink: 0 }} />}
+                  {isAdmin && !g.cover && <ImageOff style={{ width: '16px', height: '16px', color: 'rgba(239,68,68,0.6)', flexShrink: 0 }} />}
+                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {g.title}
+                  </span>
+                  {g.completion && (
+                    <span style={{ fontSize: '0.58rem', fontWeight: 800, color: g.completion === 'platine' ? '#c8c8ff' : '#FFD700', flexShrink: 0 }}>
+                      {g.completion === 'platine' ? '♦' : '✓'}
+                    </span>
+                  )}
+                </div>
+                <span style={{ fontSize: '0.72rem', fontWeight: 600, color: statusColors[g.status] ?? '#a78bfa' }}>
+                  {g.status.charAt(0).toUpperCase() + g.status.slice(1)}
+                </span>
+                <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)' }}>
+                  {g.platforms.join(' · ')}
+                </span>
+                <span style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: 700, color: g.rating != null ? '#facc15' : 'rgba(255,255,255,0.2)' }}>
+                  {g.rating != null ? `${g.rating}/10` : '—'}
+                </span>
+                <span style={{ textAlign: 'center', fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)' }}>
+                  {g.hours != null ? `${g.hours}h` : '—'}
+                </span>
+                <span style={{ textAlign: 'center', fontSize: '0.78rem', fontWeight: 800, color: g.tier ? tierColors[g.tier] : 'rgba(255,255,255,0.15)' }}>
+                  {g.tier ?? '—'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {selectedGame && (
-        <GameModal game={selectedGame} onClose={() => setSelectedGame(null)} />
+        <GameModal game={selectedGame} onClose={() => setSelectedGame(null)} allGames={initialGames} />
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 export type GameStatus = 'terminé' | 'en cours' | 'abandonné' | 'liste de souhaits' | 'infini';
 export type GamePlatform = 'PC' | 'PS5' | 'PS4' | 'Xbox Series' | 'Switch' | 'Mobile';
-export type GameTier = 'S' | 'A' | 'B' | 'C' | 'D';
+export type GameTier       = 'S' | 'A' | 'B' | 'C' | 'D';
+export type GameCompletion = '100%' | 'platine';
 
 export interface Game {
   id: string;
@@ -9,6 +10,7 @@ export interface Game {
   platforms: GamePlatform[];
   status: GameStatus;
   tier?: GameTier;         // Tier list ranking
+  completion?: GameCompletion; // 100% or platine (for 'terminé' games)
   rating?: number; // sur 10
   comment?: string;
   hours?: number;
