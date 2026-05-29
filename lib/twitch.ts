@@ -122,7 +122,7 @@ export async function fetchTwitchSchedule(
       `https://api.twitch.tv/helix/schedule?broadcaster_id=${userId}&first=${count}`,
       {
         headers: { 'Client-ID': clientId, Authorization: `Bearer ${token}` },
-        next: { revalidate: 3600 },
+        cache: 'no-store',
       },
     );
     if (!res.ok) return [];
